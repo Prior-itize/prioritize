@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>PrioritizeIt - Simple Priority List</title>
+  
+  <!-- Tailwind CSS & Configuration -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Mobile App Manifest & Web App Capable Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="PrioritizeIt">
+  <link rel="apple-touch-icon" href="https://images.unsplash.com/photo-1611224885990-ab7363d1f2a9?auto=format&fit=crop&w=180&q=80">
+  
+  <style>
+    body {
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* Smooth custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(148, 163, 184, 0.1);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.3);
+      border-radius: 3px;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="h-full text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-950 flex flex-col justify-between overflow-hidden transition-colors duration-200">
+
+  <!-- MAIN LOADING SPINNER -->
+  <div id="global-loader" class="fixed inset-0 z-50 bg-white dark:bg-slate-950 flex flex-col items-center justify-center transition-all duration-300">
+    <div class="relative w-20 h-20">
+      <div class="absolute inset-0 border-4 border-slate-200 dark:border-slate-800 rounded-full"></div>
+      <div class="absolute inset-0 border-4 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin"></div>
+    </div>
+    <h1 class="text-slate-800 dark:text-indigo-400 font-extrabold mt-6 tracking-wider text-xl">PrioritizeIt</h1>
+    <p class="text-slate-500 dark:text-slate-400 text-sm mt-2">Loading your list...</p>
+  </div>
+
+  <!-- AUTH SCREEN -->
+  <div id="auth-screen" class="hidden fixed inset-0 z-40 bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4 overflow-y-auto transition-colors duration-200">
+    <div class="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+      <!-- Decorative Glow Behind Card (Only visible in Dark Mode) -->
+      <div class="hidden dark:block absolute -top-16 -right-16 w-36 h-36 bg-indigo-500/20 rounded-full blur-3xl"></div>
+      <div class="hidden dark:block absolute -bottom-16 -left-16 w-36 h-36 bg-emerald-500/10 rounded-full blur-3xl"></div>
+
+      <div class="text-center mb-6 relative z-10">
+        <div class="inline-flex p-3.5 bg-slate-900 dark:bg-gradient-to-tr dark:from-indigo-600 dark:to-violet-500 rounded-2xl shadow-md text-white text-2xl mb-4">
+          <i class="fa-solid fa-list-check animate-pulse"></i>
+        </div>
+        <h2 class="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Welcome to PrioritizeIt</h2>
+        <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Save and view your list from any device</p>
+      </div>
+
+      <!-- Auth Form -->
+      <form id="auth-form" class="space-y-4 relative z-10">
+        <div>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 pl-1">Email Address</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 dark:text-slate-500">
+              <i class="fa-regular fa-envelope text-sm"></i>
+            </span>
+            <input type="email" id="auth-email" required placeholder="name@domain.com" 
+              class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-850 rounded-xl focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-950 dark:text-white outline-none transition text-sm">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 pl-1">Password</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 dark:text-slate-500">
+              <i class="fa-solid fa-lock text-sm"></i>
+            </span>
+            <input type="password" id="auth-password" required placeholder="••••••••" 
+              class="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-850 rounded-xl focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-950 dark:text-white outline-none transition text-sm">
+          </div>
+        </div>
+
+        <div id="auth-error-msg" class="hidden text-rose-500 dark:text-rose-400 text-xs py-2 px-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-lg text-center font-medium">
+          <!-- Populated dynamically -->
+        </div>
+
+        <div class="pt-1 flex flex-col gap-2.5">
+          <button type="submit" id="btn-login" class="w-full py-3 px-4 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 active:scale-[0.98] transition-all text-white font-bold rounded-xl shadow-md text-sm flex justify-center items-center gap-2">
+            <span>Log In</span>
+            <i class="fa-solid fa-arrow-right text-xs"></i>
+          </button>
+          
+          <button type="button" id="btn-register" class="w-full py-3 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 active:scale-[0.98] transition-all text-slate-800 dark:text-slate-300 font-bold rounded-xl text-sm">
+            Create Free Account
+          </button>
+
+          <div class="relative flex py-1 items-center">
+            <div class="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+            <span class="flex-shrink mx-4 text-slate-400 dark:text-slate-500 text-[10px] uppercase tracking-wider font-bold">or</span>
+            <div class="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+          </div>
+
+          <!-- Google Sign-In Button -->
+          <button type="button" id="btn-google" class="w-full py-2.5 px-4 bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-750 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-[0.98] transition-all text-slate-700 dark:text-slate-200 font-bold rounded-xl text-sm flex justify-center items-center gap-2 shadow-sm">
+            <i class="fa-brands fa-google text-red-500"></i>
+            <span>Continue with Google</span>
+          </button>
+
+          <button type="button" id="btn-guest" class="w-full py-2 px-4 bg-transparent hover:bg-slate-50 dark:hover:bg-slate-850 active:scale-[0.98] transition-all text-slate-500 dark:text-slate-400 font-semibold rounded-xl text-xs flex justify-center items-center gap-1.5">
+            <i class="fa-regular fa-user"></i>
+            <span>Continue Offline (Saves locally)</span>
+          </button>
+        </div>
+      </form>
+      
+      <p class="text-center text-slate-400 dark:text-slate-500 text-[10px] mt-4 tracking-wide leading-relaxed px-2">
+        Your data is fully secure. Embed on Google Sites by simply referencing your hosted domain.
+      </p>
+    </div>
+  </div>
+
+  <!-- APPLICATION CONTAINER -->
+  <div id="app-container" class="hidden h-full flex flex-col justify-between max-w-2xl mx-auto w-full bg-white dark:bg-slate-900 md:shadow-xl md:border-x md:border-slate-200 dark:md:border-slate-800 transition-colors duration-200">
+    
+    <!-- HEADER -->
+    <header class="bg-slate-100/90 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-4 py-3.5 flex items-center justify-between sticky top-0 z-20 transition-colors duration-200">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-slate-900 dark:bg-gradient-to-tr dark:from-indigo-600 dark:to-purple-500 flex items-center justify-center shadow-sm">
+          <i class="fa-solid fa-list-check text-white text-base animate-pulse"></i>
+        </div>
+        <div>
+          <h1 class="text-base font-extrabold tracking-tight text-slate-900 dark:text-white leading-none">PrioritizeIt</h1>
+          <span id="user-display" class="text-[10px] text-slate-500 dark:text-indigo-400 font-semibold tracking-wide block mt-1">loading...</span>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-2">
+        <!-- Theme Toggle Button -->
+        <button id="btn-theme-toggle" class="w-8 h-8 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 transition hover:bg-slate-100 dark:hover:bg-slate-800" title="Toggle Theme">
+          <i id="theme-icon" class="fa-solid fa-moon"></i>
+        </button>
+        <button id="btn-sync-status" class="w-8 h-8 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 dark:text-emerald-400 transition hover:bg-slate-100 dark:hover:bg-slate-800" title="Data Synced">
+          <i class="fa-solid fa-cloud"></i>
+        </button>
+        <button id="btn-logout" class="w-8 h-8 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 transition hover:bg-slate-100 dark:hover:bg-slate-800" title="Logout">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- PRIORITY LIST DASHBOARD -->
+    <main class="flex-1 overflow-y-auto px-4 py-4 space-y-4 no-scrollbar">
+      
+      <!-- Stats Dashboard -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800/60 rounded-2xl p-3 text-center">
+          <span class="block text-[10px] uppercase font-bold text-slate-500 tracking-wider">Total Items</span>
+          <span id="stat-total" class="text-xl font-extrabold text-slate-900 dark:text-white mt-1 block">0</span>
+        </div>
+        <div class="bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl p-3 text-center">
+          <span class="block text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400 tracking-wider">High (80%+)</span>
+          <span id="stat-high" class="text-xl font-extrabold text-indigo-700 dark:text-indigo-300 mt-1 block">0</span>
+        </div>
+        <div class="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl p-3 text-center">
+          <span class="block text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 tracking-wider">Top Priority</span>
+          <span id="stat-top-item" class="text-xs font-bold text-emerald-800 dark:text-emerald-300 truncate mt-1 block px-1">-</span>
+        </div>
+      </div>
+
+      <!-- MAIN LIST CONTAINER -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between px-1">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+            <i class="fa-solid fa-arrow-down-wide-short text-indigo-600 dark:text-indigo-400"></i>
+            <span>Your Priority List</span>
+          </span>
+          <span id="list-counter" class="text-xs text-slate-400 dark:text-slate-500 font-medium">0 items</span>
+        </div>
+
+        <!-- Dynamic Items Container -->
+        <div id="items-list-container" class="space-y-2.5 transition-all duration-300">
+          <!-- Dynamic Items inserted here -->
+        </div>
+
+        <!-- EMPTY STATE CARD -->
+        <div id="empty-state" class="hidden py-12 px-6 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl text-center bg-slate-50 dark:bg-slate-950/10">
+          <div class="w-16 h-16 mx-auto bg-slate-100 dark:bg-slate-950/50 rounded-2xl flex items-center justify-center text-slate-400 dark:text-slate-600 text-xl mb-4">
+            <i class="fa-regular fa-folder-open"></i>
+          </div>
+          <h3 class="font-bold text-slate-700 dark:text-slate-300">Your list is empty</h3>
+          <p class="text-slate-400 dark:text-slate-500 text-xs mt-1.5 max-w-xs mx-auto">Create and schedule items below to get started.</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- FOOTER / ADD ELEMENT BAR -->
+    <footer class="bg-slate-100/90 dark:bg-slate-950/90 border-t border-slate-200 dark:border-slate-800/80 p-4 sticky bottom-0 z-20 backdrop-blur-lg transition-colors duration-200">
+      <form id="add-item-form" class="space-y-3">
+        
+        <!-- Base Inputs -->
+        <div class="space-y-2.5">
+          <!-- Task Name input -->
+          <div>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 dark:text-slate-500">
+                <i class="fa-solid fa-tag text-xs"></i>
+              </span>
+              <input type="text" id="input-task-name" required placeholder="What needs to get done?..."
+                class="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-xl focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-900 dark:text-white outline-none transition text-sm">
+            </div>
+          </div>
+
+          <!-- Slider Container with Editable Text Box -->
+          <div class="bg-white dark:bg-slate-900/60 p-3 rounded-xl border border-slate-200 dark:border-slate-800/70">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-slate-500 dark:text-slate-400">Priority Percentage</span>
+              <!-- Editable numerical box inside custom badge container -->
+              <div class="flex items-center gap-1 bg-slate-100 dark:bg-indigo-950/40 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-indigo-900/30">
+                <input type="number" id="input-priority-number" min="0" max="100" value="50"
+                  class="w-8 text-center text-xs font-black text-slate-800 dark:text-indigo-400 bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                <span class="text-xs font-black text-slate-800 dark:text-indigo-400">%</span>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-4">
+              <span class="text-[10px] text-slate-400 dark:text-slate-500 font-bold">0%</span>
+              <input type="range" id="input-priority-slider" min="0" max="100" value="50" 
+                class="w-full h-2 bg-slate-100 dark:bg-slate-950 rounded-lg appearance-none cursor-pointer accent-slate-800 dark:accent-indigo-500">
+              <span class="text-[10px] text-slate-400 dark:text-slate-500 font-bold">100%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADVANCED OPTIONS DRAWERS -->
+        <div class="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900/30 overflow-hidden">
+          <button type="button" id="btn-toggle-advanced" class="w-full px-3 py-2.5 flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/60 transition">
+            <span class="flex items-center gap-2">
+              <i class="fa-solid fa-sliders text-indigo-500"></i>
+              <span>Extra Options (Schedule & Priority Changes)</span>
+            </span>
+            <i id="advanced-chevron" class="fa-solid fa-chevron-down transition-transform duration-200"></i>
+          </button>
+
+          <!-- Collapsible Content -->
+          <div id="advanced-drawer" class="hidden border-t border-slate-100 dark:border-slate-850 p-3.5 space-y-4 bg-slate-50/50 dark:bg-slate-950/20">
+            
+            <!-- Dynamic Priority Scaling Section -->
+            <div class="space-y-2">
+              <label class="relative flex items-start gap-2.5 cursor-pointer">
+                <input type="checkbox" id="checkbox-enable-scaling" class="mt-1 accent-indigo-500 rounded">
+                <div>
+                  <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block">Change Priority Over Time</span>
+                  <span class="text-[10px] text-slate-400 dark:text-slate-500 block">Slowly raise or lower this item's percentage as days pass</span>
+                </div>
+              </label>
+
+              <div id="scaling-sub-inputs" class="hidden pl-6 grid grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Target Priority</label>
+                  <div class="relative">
+                    <input type="number" id="input-scale-target" min="0" max="100" placeholder="80" 
+                      class="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-900 dark:text-white outline-none">
+                    <span class="absolute right-2.5 top-2 text-[10px] text-slate-400 font-bold">%</span>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Duration (Days)</label>
+                  <input type="number" id="input-scale-days" min="1" placeholder="7" 
+                    class="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-900 dark:text-white outline-none">
+                </div>
+              </div>
+            </div>
+
+            <hr class="border-slate-200 dark:border-slate-800/80">
+
+            <!-- Scheduling Activation/Expiration Section -->
+            <div class="space-y-2.5">
+              <label class="relative flex items-start gap-2.5 cursor-pointer">
+                <input type="checkbox" id="checkbox-enable-scheduling" class="mt-1 accent-indigo-500 rounded">
+                <div>
+                  <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block">Schedule Dates</span>
+                  <span class="text-[10px] text-slate-400 dark:text-slate-500 block">Choose when this item shows up and when it gets deleted</span>
+                </div>
+              </label>
+
+              <div id="scheduling-sub-inputs" class="hidden pl-6 space-y-2.5 pt-1">
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Show Date & Time</label>
+                    <input type="datetime-local" id="input-schedule-start" 
+                      class="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-800 dark:text-slate-300 outline-none">
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Delete Date & Time</label>
+                    <input type="datetime-local" id="input-schedule-end" 
+                      class="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-800 dark:text-slate-300 outline-none">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <button type="submit" class="w-full py-3 bg-slate-900 dark:bg-gradient-to-r dark:from-indigo-600 dark:to-purple-600 hover:bg-slate-800 dark:hover:from-indigo-500 dark:hover:to-purple-500 text-white font-extrabold rounded-xl transition shadow-md text-sm flex items-center justify-center gap-2">
+          <i class="fa-solid fa-plus text-xs"></i>
+          <span>Add Item</span>
+        </button>
+      </form>
+    </footer>
+  </div>
+
+  <!-- CUSTOM ALERT MODAL -->
+  <div id="custom-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl">
+      <div class="flex items-center gap-3 text-amber-500 dark:text-amber-400 mb-3">
+        <i class="fa-solid fa-circle-exclamation text-xl"></i>
+        <h4 class="font-bold text-slate-900 dark:text-white text-base" id="modal-title">Attention</h4>
+      </div>
+      <p class="text-slate-600 dark:text-slate-300 text-xs leading-relaxed" id="modal-message">Notification details</p>
+      <div class="flex justify-end gap-2.5 mt-5">
+        <button id="modal-cancel-btn" class="hidden px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-800 dark:text-slate-300 text-xs font-bold rounded-lg transition">Cancel</button>
+        <button id="modal-confirm-btn" class="px-4 py-2 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase Integration Script -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { 
+      getAuth, 
+      signInWithCustomToken, 
+      signInAnonymously, 
+      onAuthStateChanged, 
+      signInWithEmailAndPassword, 
+      createUserWithEmailAndPassword, 
+      signOut,
+      GoogleAuthProvider,
+      signInWithPopup
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, deleteDoc, collection, query, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Application Variables Setup
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'prioritizeit-app';
+    
+    // Explicit Firebase configuration provided by you
+    const explicitFirebaseConfig = {
+      apiKey: "AIzaSyDY9JucQ_cr4vitr_FknxpBhw-n5639smM",
+      authDomain: "prioritizeit-97021.firebaseapp.com",
+      projectId: "prioritizeit-97021",
+      storageBucket: "prioritizeit-97021.firebasestorage.app",
+      messagingSenderId: "737987066459",
+      appId: "1:737987066459:web:61bc646c298b6bdfff1d7e",
+      measurementId: "G-EPZJXJXVJ8"
+    };
+
+    const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
+    const firebaseConfig = firebaseConfigStr ? JSON.parse(firebaseConfigStr) : explicitFirebaseConfig;
+    
+    let firebaseEnabled = false;
+    let auth, db, currentUser = null;
+    let localItems = [];
+
+    // Selectors
+    const globalLoader = document.getElementById('global-loader');
+    const authScreen = document.getElementById('auth-screen');
+    const appContainer = document.getElementById('app-container');
+    const authForm = document.getElementById('auth-form');
+    const authEmail = document.getElementById('auth-email');
+    const authPassword = document.getElementById('auth-password');
+    const authErrorMsg = document.getElementById('auth-error-msg');
+    const btnLogin = document.getElementById('btn-login');
+    const btnRegister = document.getElementById('btn-register');
+    const btnGoogle = document.getElementById('btn-google');
+    const btnGuest = document.getElementById('btn-guest');
+    const btnLogout = document.getElementById('btn-logout');
+    const userDisplay = document.getElementById('user-display');
+    const btnSyncStatus = document.getElementById('btn-sync-status');
+    const itemsListContainer = document.getElementById('items-list-container');
+    const emptyState = document.getElementById('empty-state');
+    const addItemForm = document.getElementById('add-item-form');
+    const inputTaskName = document.getElementById('input-task-name');
+    const inputPrioritySlider = document.getElementById('input-priority-slider');
+    const inputPriorityNumber = document.getElementById('input-priority-number');
+    
+    // Stats selectors
+    const statTotal = document.getElementById('stat-total');
+    const statHigh = document.getElementById('stat-high');
+    const statTopItem = document.getElementById('stat-top-item');
+    const listCounter = document.getElementById('list-counter');
+
+    // Advanced Selectors
+    const btnToggleAdvanced = document.getElementById('btn-toggle-advanced');
+    const advancedDrawer = document.getElementById('advanced-drawer');
+    const advancedChevron = document.getElementById('advanced-chevron');
+    const checkboxEnableScaling = document.getElementById('checkbox-enable-scaling');
+    const scalingSubInputs = document.getElementById('scaling-sub-inputs');
+    const inputScaleTarget = document.getElementById('input-scale-target');
+    const inputScaleDays = document.getElementById('input-scale-days');
+    const checkboxEnableScheduling = document.getElementById('checkbox-enable-scheduling');
+    const schedulingSubInputs = document.getElementById('scheduling-sub-inputs');
+    const inputScheduleStart = document.getElementById('input-schedule-start');
+    const inputScheduleEnd = document.getElementById('input-schedule-end');
+
+    // Theme Switcher Logic
+    const btnThemeToggle = document.getElementById('btn-theme-toggle');
+    const themeIcon = document.getElementById('theme-icon');
+
+    function initTheme() {
+      const storedTheme = localStorage.getItem('prioritizeit_theme') || 'light';
+      setTheme(storedTheme);
+    }
+
+    function setTheme(theme) {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        themeIcon.className = "fa-solid fa-sun text-amber-400";
+        localStorage.setItem('prioritizeit_theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        themeIcon.className = "fa-solid fa-moon text-slate-600";
+        localStorage.setItem('prioritizeit_theme', 'light');
+      }
+    }
+
+    btnThemeToggle.addEventListener('click', () => {
+      const isCurrentlyDark = document.documentElement.classList.contains('dark');
+      setTheme(isCurrentlyDark ? 'light' : 'dark');
+    });
+
+    initTheme();
+
+    // Advanced Drawer Toggle Animation
+    btnToggleAdvanced.addEventListener('click', () => {
+      const isHidden = advancedDrawer.classList.contains('hidden');
+      if (isHidden) {
+        advancedDrawer.classList.remove('hidden');
+        advancedChevron.style.transform = 'rotate(180deg)';
+      } else {
+        advancedDrawer.classList.add('hidden');
+        advancedChevron.style.transform = 'rotate(0deg)';
+      }
+    });
+
+    // Sub-inputs visibility logic
+    checkboxEnableScaling.addEventListener('change', (e) => {
+      scalingSubInputs.classList.toggle('hidden', !e.target.checked);
+    });
+
+    checkboxEnableScheduling.addEventListener('change', (e) => {
+      schedulingSubInputs.classList.toggle('hidden', !e.target.checked);
+    });
+
+    // UI Feedback Helpers (Custom Modals instead of Browser Alerts)
+    const customModal = document.getElementById('custom-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalMessage = document.getElementById('modal-message');
+    const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+    const modalCancelBtn = document.getElementById('modal-cancel-btn');
+
+    function showAlert(title, message, onConfirm = null) {
+      modalTitle.innerText = title;
+      modalMessage.innerText = message;
+      modalCancelBtn.classList.add('hidden');
+      customModal.classList.remove('hidden');
+      
+      const handler = () => {
+        customModal.classList.add('hidden');
+        if (onConfirm) onConfirm();
+        modalConfirmBtn.removeEventListener('click', handler);
+      };
+      modalConfirmBtn.addEventListener('click', handler);
+    }
+
+    function showConfirm(title, message, onConfirm, onCancel = null) {
+      modalTitle.innerText = title;
+      modalMessage.innerText = message;
+      modalCancelBtn.classList.remove('hidden');
+      customModal.classList.remove('hidden');
+
+      const handleConfirm = () => {
+        customModal.classList.add('hidden');
+        if (onConfirm) onConfirm();
+        cleanup();
+      };
+
+      const handleCancel = () => {
+        customModal.classList.add('hidden');
+        if (onCancel) onCancel();
+        cleanup();
+      };
+
+      function cleanup() {
+        modalConfirmBtn.removeEventListener('click', handleConfirm);
+        modalCancelBtn.removeEventListener('click', handleCancel);
+      }
+
+      modalConfirmBtn.addEventListener('click', handleConfirm);
+      modalCancelBtn.addEventListener('click', handleCancel);
+    }
+
+    // Initialize Firebase
+    try {
+      if (firebaseConfig) {
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        firebaseEnabled = true;
+      }
+    } catch (e) {
+      console.warn("Could not load real Firebase configuration, falling back to Sandbox simulation Mode.", e);
+    }
+
+    // BI-DIRECTIONAL VALUE CONTROLLER (SLIDER & INPUT BOX SYNC)
+    function syncPriorityValues(val, origin) {
+      let numVal = parseInt(val);
+      if (isNaN(numVal)) numVal = 0;
+      
+      // Clamp inputs strictly between 0 and 100
+      const clampedVal = Math.max(0, Math.min(100, numVal));
+      
+      if (origin !== 'slider') {
+        inputPrioritySlider.value = clampedVal;
+      }
+      if (origin !== 'number') {
+        inputPriorityNumber.value = clampedVal;
+      }
+    }
+
+    inputPrioritySlider.addEventListener('input', (e) => {
+      syncPriorityValues(e.target.value, 'slider');
+    });
+
+    inputPriorityNumber.addEventListener('input', (e) => {
+      syncPriorityValues(e.target.value, 'number');
+    });
+
+    inputPriorityNumber.addEventListener('blur', (e) => {
+      // Re-clamp and replace value in the field if out of bounds or blank on focus lose
+      if (e.target.value === "") {
+        syncPriorityValues(50);
+      } else {
+        syncPriorityValues(e.target.value);
+      }
+    });
+
+    // SIMULATED DATABASE SYSTEM (FOR OFFLINE / GUEST MODE / SANDBOX DEPLOYMENT)
+    const SIM_DB_KEY = `prioritizeit_${appId}_simulated_db`;
+    
+    function loadLocalItems() {
+      try {
+        const saved = localStorage.getItem(SIM_DB_KEY);
+        localItems = saved ? JSON.parse(saved) : [];
+      } catch (err) {
+        localItems = [];
+      }
+      processAndRenderData(localItems);
+    }
+
+    function saveLocalItems() {
+      localStorage.setItem(SIM_DB_KEY, JSON.stringify(localItems));
+      processAndRenderData(localItems);
+    }
+
+    // MAIN RENDER, SORT & REALTIME CALCULATION PIPELINE
+    function processAndRenderData(items) {
+      const now = new Date();
+      const validItems = [];
+
+      items.forEach((item) => {
+        // 1. Process Scheduled Start Date (Ignore if it has not created itself yet)
+        if (item.scheduleStart) {
+          const startDateTime = new Date(item.scheduleStart);
+          if (now < startDateTime) {
+            return; // Skip rendering for now
+          }
+        }
+
+        // 2. Process Scheduled End Date (Auto-delete if expired)
+        if (item.scheduleEnd) {
+          const endDateTime = new Date(item.scheduleEnd);
+          if (now >= endDateTime) {
+            deleteItem(item.id); // Trigger passive/active deletion
+            return;
+          }
+        }
+
+        // 3. Process Dynamic Priority Scaling Calculations
+        let computedPriority = parseInt(item.priority) || 0;
+        let scaleIndicatorText = "";
+
+        if (item.dynamicScale && item.dynamicScale.enabled) {
+          const startTime = new Date(item.dynamicScale.startedAt || item.createdAt || new Date()).getTime();
+          const targetPriority = parseInt(item.dynamicScale.targetPriority);
+          const durationDays = parseFloat(item.dynamicScale.durationDays) || 1;
+          
+          if (!isNaN(targetPriority) && durationDays > 0) {
+            const elapsedMs = now.getTime() - startTime;
+            const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24);
+            
+            if (elapsedDays >= durationDays) {
+              computedPriority = targetPriority;
+              scaleIndicatorText = `Reached target (${targetPriority}%)`;
+            } else {
+              const fraction = elapsedDays / durationDays;
+              const originalPriority = parseInt(item.priority) || 0;
+              computedPriority = Math.round(originalPriority + (targetPriority - originalPriority) * fraction);
+              
+              // Clamp computed value securely
+              computedPriority = Math.max(0, Math.min(100, computedPriority));
+              
+              // Formatting friendly dynamic string
+              const prefix = targetPriority > originalPriority ? '↑' : '↓';
+              scaleIndicatorText = `Changing ${prefix} ${targetPriority}% (${Math.round((durationDays - elapsedDays) * 10) / 10}d left)`;
+            }
+          }
+        }
+
+        validItems.push({
+          ...item,
+          displayedPriority: computedPriority,
+          scaleIndicator: scaleIndicatorText
+        });
+      });
+
+      // Sort priority descending, then alphabetically
+      validItems.sort((a, b) => {
+        const priorityDiff = b.displayedPriority - a.displayedPriority;
+        if (priorityDiff !== 0) return priorityDiff;
+        return a.name.localeCompare(b.name);
+      });
+
+      // Clear dynamic template
+      itemsListContainer.innerHTML = '';
+
+      if (validItems.length === 0) {
+        emptyState.classList.remove('hidden');
+        statTotal.innerText = '0';
+        statHigh.innerText = '0';
+        statTopItem.innerText = '-';
+        listCounter.innerText = 'No items';
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      listCounter.innerText = `${validItems.length} active items`;
+
+      // Calculate Stats
+      const totalCount = validItems.length;
+      const highCount = validItems.filter(i => i.displayedPriority >= 80).length;
+      const highestPriorityItemName = validItems[0].name;
+
+      statTotal.innerText = totalCount;
+      statHigh.innerText = highCount;
+      statTopItem.innerText = highestPriorityItemName;
+
+      // Construct list UI elements
+      validItems.forEach((item) => {
+        const priorityVal = item.displayedPriority;
+        let barColor = "bg-indigo-600 dark:bg-indigo-500";
+        let glowColor = "shadow-indigo-500/10";
+        let textColor = "text-indigo-600 dark:text-indigo-400";
+        let bgGradient = "from-white to-slate-50 dark:from-slate-900 dark:to-slate-950";
+
+        if (priorityVal >= 80) {
+          barColor = "bg-rose-500";
+          glowColor = "shadow-rose-500/15";
+          textColor = "text-rose-500 dark:text-rose-400";
+          bgGradient = "from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 border-rose-200 dark:border-rose-950/30";
+        } else if (priorityVal <= 30) {
+          barColor = "bg-emerald-500";
+          glowColor = "shadow-emerald-500/10";
+          textColor = "text-emerald-600 dark:text-emerald-400";
+        }
+
+        const itemCard = document.createElement('div');
+        itemCard.className = `p-3.5 bg-gradient-to-r ${bgGradient} border border-slate-200 dark:border-slate-800/80 rounded-2xl shadow-sm ${glowColor} flex flex-col gap-2 transition-all active:scale-[0.99] duration-150`;
+        
+        let indicatorBadges = '';
+        if (item.scaleIndicator) {
+          indicatorBadges += `<span class="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"><i class="fa-solid fa-chart-line"></i> ${item.scaleIndicator}</span>`;
+        }
+        if (item.scheduleEnd) {
+          const localEndStr = new Date(item.scheduleEnd).toLocaleDateString([], {month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit'});
+          indicatorBadges += `<span class="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400"><i class="fa-regular fa-clock"></i> Expires: ${localEndStr}</span>`;
+        }
+
+        itemCard.innerHTML = `
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+              <div class="w-2.5 h-2.5 rounded-full ${barColor}"></div>
+              <div class="truncate">
+                <span class="font-bold text-slate-800 dark:text-slate-100 text-sm block truncate">${item.name}</span>
+                <div class="flex flex-wrap gap-1 mt-1">${indicatorBadges}</div>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-3">
+              <span class="text-xs font-extrabold ${textColor} bg-slate-100 dark:bg-slate-900 py-1 px-2 border border-slate-200 dark:border-slate-800/60 rounded-lg shrink-0">${priorityVal}%</span>
+              
+              <button data-id="${item.id}" class="btn-delete-item w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-950 text-slate-400 dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center justify-center transition active:scale-90">
+                <i class="fa-regular fa-trash-can text-xs"></i>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Visual Priority Level Meter -->
+          <div class="w-full bg-slate-100 dark:bg-slate-950 h-1.5 rounded-full overflow-hidden mt-1">
+            <div class="h-full ${barColor} rounded-full transition-all duration-300" style="width: ${priorityVal}%"></div>
+          </div>
+        `;
+
+        // Attachment handler for deletion
+        itemCard.querySelector('.btn-delete-item').addEventListener('click', (e) => {
+          e.stopPropagation();
+          const targetId = e.currentTarget.getAttribute('data-id');
+          showConfirm("Confirm Delete", `Are you sure you want to remove "${item.name}" from your priority list?`, () => {
+            deleteItem(targetId);
+          });
+        });
+
+        itemsListContainer.appendChild(itemCard);
+      });
+    }
+
+    // ACTIONS: Add / Delete items
+    async function addNewItem(name, priority, advancedOptions) {
+      if (!currentUser) {
+        showAlert("Error", "You must be authenticated to perform this action.");
+        return;
+      }
+
+      const itemPayload = {
+        name: name,
+        priority: parseInt(priority) || 0,
+        createdAt: new Date().toISOString(),
+        ...advancedOptions
+      };
+
+      if (firebaseEnabled && !currentUser.isAnonymous) {
+        try {
+          btnSyncStatus.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-indigo-500"></i>`;
+          const collectionRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'priorities');
+          await addDoc(collectionRef, itemPayload);
+          btnSyncStatus.innerHTML = `<i class="fa-solid fa-cloud text-emerald-400"></i>`;
+        } catch (e) {
+          showAlert("Database Issue", "Failed to sync element with cloud. We saved it locally on this device instead.");
+          console.error(e);
+        }
+      } else {
+        // Fallback simulated local database
+        const localObj = { ...itemPayload, id: crypto.randomUUID() };
+        localItems.push(localObj);
+        saveLocalItems();
+      }
+    }
+
+    async function deleteItem(id) {
+      if (firebaseEnabled && currentUser && !currentUser.isAnonymous) {
+        try {
+          btnSyncStatus.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-indigo-500"></i>`;
+          const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'priorities', id);
+          await deleteDoc(docRef);
+          btnSyncStatus.innerHTML = `<i class="fa-solid fa-cloud text-emerald-400"></i>`;
+        } catch (e) {
+          showAlert("Error", "Failed to delete item from cloud service.");
+        }
+      } else {
+        localItems = localItems.filter(i => i.id !== id);
+        saveLocalItems();
+      }
+    }
+
+    // FORM HANDLE
+    addItemForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = inputTaskName.value.trim();
+      const priority = inputPrioritySlider.value;
+      
+      if (!name) return;
+
+      // Pack Advanced Options
+      const advancedOptions = {};
+      
+      if (checkboxEnableScaling.checked) {
+        advancedOptions.dynamicScale = {
+          enabled: true,
+          targetPriority: parseInt(inputScaleTarget.value) || 0,
+          durationDays: parseFloat(inputScaleDays.value) || 1,
+          startedAt: new Date().toISOString()
+        };
+      } else {
+        advancedOptions.dynamicScale = { enabled: false };
+      }
+
+      if (checkboxEnableScheduling.checked) {
+        if (inputScheduleStart.value) {
+          advancedOptions.scheduleStart = new Date(inputScheduleStart.value).toISOString();
+        }
+        if (inputScheduleEnd.value) {
+          advancedOptions.scheduleEnd = new Date(inputScheduleEnd.value).toISOString();
+        }
+      }
+
+      addNewItem(name, priority, advancedOptions);
+      
+      // Reset form controls safely
+      inputTaskName.value = '';
+      syncPriorityValues(50);
+      checkboxEnableScaling.checked = false;
+      scalingSubInputs.classList.add('hidden');
+      inputScaleTarget.value = '';
+      inputScaleDays.value = '';
+      checkboxEnableScheduling.checked = false;
+      schedulingSubInputs.classList.add('hidden');
+      inputScheduleStart.value = '';
+      inputScheduleEnd.value = '';
+      
+      // Close advanced drawer on success
+      advancedDrawer.classList.add('hidden');
+      advancedChevron.style.transform = 'rotate(0deg)';
+      
+      // Auto scroll back up to list to see newly positioned item
+      setTimeout(() => {
+        itemsListContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 100);
+    });
+
+    // Refresh display loop every 30 seconds for real-time dynamic scaling & expiration
+    setInterval(() => {
+      if (firebaseEnabled && currentUser && !currentUser.isAnonymous) {
+        // Active Firestore handles its own push, but local items need recalculation
+      } else {
+        processAndRenderData(localItems);
+      }
+    }, 30000);
+
+    // FIREBASE LIFECYCLE LISTENERS
+    let activeFirestoreUnsubscribe = null;
+
+    function listenToFirestoreUserDatabase(user) {
+      if (activeFirestoreUnsubscribe) {
+        activeFirestoreUnsubscribe();
+      }
+
+      if (!firebaseEnabled || user.isAnonymous) {
+        // If guest session or simulation, render localized storage items
+        loadLocalItems();
+        return;
+      }
+
+      // Query standard collection adhering strictly to paths
+      const colRef = collection(db, 'artifacts', appId, 'users', user.uid, 'priorities');
+      
+      activeFirestoreUnsubscribe = onSnapshot(colRef, (snapshot) => {
+        const items = [];
+        snapshot.forEach((doc) => {
+          items.push({ id: doc.id, ...doc.data() });
+        });
+        processAndRenderData(items);
+        btnSyncStatus.innerHTML = `<i class="fa-solid fa-cloud text-emerald-400"></i>`;
+      }, (error) => {
+        console.error("Firestore database connection failed:", error);
+        showAlert("Sync Warning", "Real-time updates interrupted. Reverting to persistent memory cache.");
+        loadLocalItems();
+      });
+    }
+
+    // HANDLE AUTH FLOW & BUTTON ACTIONS
+    async function triggerAnonymousGuestSession() {
+      globalLoader.classList.remove('opacity-0', 'pointer-events-none');
+      try {
+        if (firebaseEnabled) {
+          await signInAnonymously(auth);
+        } else {
+          // Simulation fallback triggered instantly
+          onUserAuthenticated(null);
+        }
+      } catch (err) {
+        showAlert("Guest Mode", "Entering standalone safe mode. No internet required.");
+        onUserAuthenticated(null);
+      } finally {
+        globalLoader.classList.add('opacity-0', 'pointer-events-none');
+      }
+    }
+
+    function onUserAuthenticated(user) {
+      currentUser = user;
+      authScreen.classList.add('hidden');
+      appContainer.classList.remove('hidden');
+      globalLoader.classList.add('opacity-0', 'pointer-events-none');
+
+      if (user) {
+        if (user.isAnonymous) {
+          userDisplay.innerHTML = `<i class="fa-regular fa-user mr-1"></i> Guest Sandbox`;
+          btnSyncStatus.innerHTML = `<i class="fa-solid fa-circle-nodes text-yellow-500" title="Offline Local Cache"></i>`;
+        } else {
+          userDisplay.innerHTML = `<i class="fa-solid fa-user-shield mr-1"></i> ${user.email}`;
+          btnSyncStatus.innerHTML = `<i class="fa-solid fa-cloud text-emerald-400" title="Secure Connected Mode"></i>`;
+        }
+        listenToFirestoreUserDatabase(user);
+      } else {
+        userDisplay.innerHTML = `<i class="fa-solid fa-microchip mr-1"></i> Standalone Active`;
+        btnSyncStatus.innerHTML = `<i class="fa-solid fa-floppy-disk text-slate-400" title="Local Cache"></i>`;
+        loadLocalItems();
+      }
+    }
+
+    // Initialize Auth Listener on Load
+    window.addEventListener('DOMContentLoaded', async () => {
+      // Small UI setup delay to prevent visual flashes
+      setTimeout(() => {
+        globalLoader.classList.add('opacity-0', 'pointer-events-none');
+      }, 800);
+
+      if (firebaseEnabled) {
+        // Authenticate using tokens if provided instantly or bind listeners
+        const initAuth = async () => {
+          try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+              await signInWithCustomToken(auth, __initial_auth_token);
+            }
+          } catch (e) {
+            console.warn("Failed custom token credentials initialization:", e);
+          }
+        };
+        initAuth();
+
+        onAuthStateChanged(auth, (user) => {
+          if (user) {
+            onUserAuthenticated(user);
+          } else {
+            currentUser = null;
+            appContainer.classList.add('hidden');
+            authScreen.classList.remove('hidden');
+          }
+        });
+      } else {
+        // No Firebase configured? Present screen directly in Standalone/PWA guest simulation mode
+        currentUser = null;
+        appContainer.classList.add('hidden');
+        authScreen.classList.remove('hidden');
+      }
+    });
+
+    // Form submission handles auth login & registration routines
+    btnLogin.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const email = authEmail.value.trim();
+      const password = authPassword.value;
+      
+      if (!email || !password) {
+        authErrorMsg.innerText = "Please fill in all identity credentials fields.";
+        authErrorMsg.classList.remove('hidden');
+        return;
+      }
+
+      globalLoader.classList.remove('opacity-0', 'pointer-events-none');
+      authErrorMsg.classList.add('hidden');
+
+      if (firebaseEnabled) {
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+          authErrorMsg.innerText = error.message.replace("Firebase:", "").trim();
+          authErrorMsg.classList.remove('hidden');
+          globalLoader.classList.add('opacity-0', 'pointer-events-none');
+        }
+      } else {
+        // Mock success database simulation if hosted statically elsewhere
+        globalLoader.classList.add('opacity-0', 'pointer-events-none');
+        showAlert("Development Notice", "Firebase Authentication requires integration. We logged you in automatically via Sandbox simulation mode.", () => {
+          onUserAuthenticated({ email: email, uid: "mock_user_" + email.replace(/[^a-zA-Z0-9]/g, "") });
+        });
+      }
+    });
+
+    // Google Sign-In Action
+    btnGoogle.addEventListener('click', async () => {
+      if (!firebaseEnabled) {
+        showAlert("Sandbox Mode", "Firebase details are mock simulated right now. Connecting locally.");
+        onUserAuthenticated({ email: "google.user@domain.com", uid: "mock_google_user" });
+        return;
+      }
+
+      globalLoader.classList.remove('opacity-0', 'pointer-events-none');
+      authErrorMsg.classList.add('hidden');
+
+      try {
+        const provider = new GoogleAuthProvider();
+        // Custom parameter to encourage clean account select experience
+        provider.setCustomParameters({ prompt: 'select_account' });
+        await signInWithPopup(auth, provider);
+      } catch (error) {
+        console.error("Google login failed:", error);
+        
+        let errorMessage = "Could not sign in with Google. Please try again.";
+        if (error.code === 'auth/popup-blocked') {
+          errorMessage = "The login popup was blocked. If you are using this inside a Google Site embed, please log in with your email and password instead.";
+        } else if (error.code === 'auth/operation-not-allowed') {
+          errorMessage = "Google Sign-In is not enabled yet in your Firebase Console. Please go to your console, Auth tab, and turn on the Google provider.";
+        }
+
+        authErrorMsg.innerText = errorMessage;
+        authErrorMsg.classList.remove('hidden');
+        globalLoader.classList.add('opacity-0', 'pointer-events-none');
+      }
+    });
+
+    btnRegister.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const email = authEmail.value.trim();
+      const password = authPassword.value;
+
+      if (!email || password.length < 6) {
+        authErrorMsg.innerText = "Password must consist of at least 6 characters.";
+        authErrorMsg.classList.remove('hidden');
+        return;
+      }
+
+      globalLoader.classList.remove('opacity-0', 'pointer-events-none');
+      authErrorMsg.classList.add('hidden');
+
+      if (firebaseEnabled) {
+        try {
+          await createUserWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+          authErrorMsg.innerText = error.message.replace("Firebase: ", "").trim();
+          authErrorMsg.classList.remove('hidden');
+          globalLoader.classList.add('opacity-0', 'pointer-events-none');
+        }
+      } else {
+        globalLoader.classList.add('opacity-0', 'pointer-events-none');
+        showAlert("Account Created", "Simulated database profile registered successfully!", () => {
+          onUserAuthenticated({ email: email, uid: "mock_user_" + email.replace(/[^a-zA-Z0-9]/g, "") });
+        });
+      }
+    });
+
+    btnGuest.addEventListener('click', () => {
+      triggerAnonymousGuestSession();
+    });
+
+    btnLogout.addEventListener('click', () => {
+      showConfirm("Logout Session", "Are you sure you want to exit from PrioritizeIt?", async () => {
+        if (firebaseEnabled) {
+          await signOut(auth);
+        } else {
+          currentUser = null;
+          appContainer.classList.add('hidden');
+          authScreen.classList.remove('hidden');
+        }
+      });
+    });
+  </script>
+</body>
+</html>

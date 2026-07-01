@@ -4,13 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>PrioritizeIt - Simple Priority List</title>
-
-  <!-- Favicon Referencing -->
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PrioritizeIt</title>
-  
-  <link rel="icon" type="image/png" href="favicon.png">
   
   <!-- Tailwind CSS & Configuration -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -35,11 +28,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
-  <!-- Mobile App Manifest & Web App Capable Meta Tags -->
+  <!-- Mobile App Manifest, Favicon, & Web App Capable Meta Tags -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="PrioritizeIt">
-  <link rel="apple-touch-icon" href="favicon.png">
+  <link rel="icon" type="image/png" href="favicon.png?v=2">
+  <link rel="apple-touch-icon" href="favicon.png?v=2">
   
   <style>
     body {
@@ -378,10 +372,10 @@
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, setDoc, deleteDoc, collection, query, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // Application Variables Setup
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'prioritizeit-app';
+    // Strict safety variables handling to avoid mobile JS parsing crashes
+    const appId = (typeof __app_id !== 'undefined' && __app_id) ? __app_id : 'prioritizeit-app';
     
-    // Explicit Firebase configuration provided by you
+    // Live Firebase Project Configuration
     const explicitFirebaseConfig = {
       apiKey: "AIzaSyDY9JucQ_cr4vitr_FknxpBhw-n5639smM",
       authDomain: "prioritizeit-97021.firebaseapp.com",
@@ -392,8 +386,14 @@
       measurementId: "G-EPZJXJXVJ8"
     };
 
-    const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
-    const firebaseConfig = firebaseConfigStr ? JSON.parse(firebaseConfigStr) : explicitFirebaseConfig;
+    let firebaseConfig = explicitFirebaseConfig;
+    try {
+      if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+        firebaseConfig = JSON.parse(__firebase_config);
+      }
+    } catch (e) {
+      console.warn("Using default static config fallback:", e);
+    }
     
     let firebaseEnabled = false;
     let auth, db, currentUser = null;
@@ -537,7 +537,7 @@
       modalCancelBtn.addEventListener('click', handleCancel);
     }
 
-    // Initialize Firebase
+    // Initialize Firebase Services Safely
     try {
       if (firebaseConfig) {
         const app = initializeApp(firebaseConfig);
@@ -944,15 +944,24 @@
       }
     }
 
-    // Initialize Auth Listener on Load
+    // Initialize Auth Listener on Load with Robust Connection Safety
     window.addEventListener('DOMContentLoaded', async () => {
-      // Small UI setup delay to prevent visual flashes
-      setTimeout(() => {
-        globalLoader.classList.add('opacity-0', 'pointer-events-none');
-      }, 800);
+      let authResolved = false;
+
+      // Connection Safety Watchdog: If auth takes more than 4 seconds to verify,
+      // clear the loader overlay and direct the user safely.
+      const safetyTimeout = setTimeout(() => {
+        if (!authResolved) {
+          console.warn("Authentication verification timed out. Cleaning loader...");
+          globalLoader.classList.add('opacity-0', 'pointer-events-none');
+          if (!currentUser) {
+            appContainer.classList.add('hidden');
+            authScreen.classList.remove('hidden');
+          }
+        }
+      }, 4000);
 
       if (firebaseEnabled) {
-        // Authenticate using tokens if provided instantly or bind listeners
         const initAuth = async () => {
           try {
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -962,9 +971,15 @@
             console.warn("Failed custom token credentials initialization:", e);
           }
         };
-        initAuth();
+        await initAuth();
 
         onAuthStateChanged(auth, (user) => {
+          authResolved = true;
+          clearTimeout(safetyTimeout);
+          
+          // Smooth fade away of loading spinner
+          globalLoader.classList.add('opacity-0', 'pointer-events-none');
+          
           if (user) {
             onUserAuthenticated(user);
           } else {
@@ -974,7 +989,10 @@
           }
         });
       } else {
-        // No Firebase configured? Present screen directly in Standalone/PWA guest simulation mode
+        // Safe Mode fallback triggered instantly
+        authResolved = true;
+        clearTimeout(safetyTimeout);
+        globalLoader.classList.add('opacity-0', 'pointer-events-none');
         currentUser = null;
         appContainer.classList.add('hidden');
         authScreen.classList.remove('hidden');
@@ -1026,7 +1044,6 @@
 
       try {
         const provider = new GoogleAuthProvider();
-        // Custom parameter to encourage clean account select experience
         provider.setCustomParameters({ prompt: 'select_account' });
         await signInWithPopup(auth, provider);
       } catch (error) {

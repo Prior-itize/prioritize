@@ -98,7 +98,7 @@
         <div id="auth-error-msg" class="hidden text-rose-500 dark:text-rose-400 text-xs py-2 px-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-lg text-center font-medium"></div>
 
         <div class="pt-1 flex flex-col gap-2.5">
-          <button type="submit" id="btn-login" class="w-full py-3 px-4 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 transition-all text-white font-bold rounded-xl shadow-md text-sm flex justify-center items-center gap-2">Log In</button>
+          <button type="button" id="btn-login" class="w-full py-3 px-4 bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 transition-all text-white font-bold rounded-xl shadow-md text-sm flex justify-center items-center gap-2">Log In</button>
           <button type="button" id="btn-register" class="w-full py-3 px-4 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 font-bold rounded-xl text-sm">Create Free Account</button>
           <button type="button" id="btn-google" class="w-full py-2.5 px-4 bg-white dark:bg-slate-850 border border-slate-200 dark:text-white font-bold rounded-xl text-sm flex justify-center items-center gap-2 shadow-sm"><i class="fa-brands fa-google text-red-500"></i> Continue with Google</button>
           <button type="button" id="btn-guest" class="w-full py-2 bg-transparent text-slate-500 dark:text-slate-400 font-semibold rounded-xl text-xs">Continue Offline</button>
@@ -262,7 +262,16 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signOut, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { 
+      getAuth, 
+      onAuthStateChanged, 
+      signOut, 
+      signInAnonymously,
+      signInWithEmailAndPassword,
+      createUserWithEmailAndPassword,
+      GoogleAuthProvider,
+      signInWithPopup
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, setDoc, deleteDoc, collection, onSnapshot, addDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     const appId = 'prioritizeit-app';
@@ -283,6 +292,7 @@
     let subjectsData = []; 
     let activeDroppedSubjectFilters = []; 
     let activeDragSubjectId = null;
+    let activeFirestoreUnsubscribes = [];
 
     // DOM Binding Elements
     const globalLoader = document.getElementById('global-loader');
@@ -310,7 +320,7 @@
     const selectRecurrenceType = document.getElementById('select-recurrence-type');
     const inputRecurrenceValue = document.getElementById('input-recurrence-value');
 
-    // DOM Elements for Auth and Forms (Fixed missing definitions)
+    // DOM Elements for Auth and Forms
     const addItemForm = document.getElementById('add-item-form');
     const authEmail = document.getElementById('auth-email');
     const authPassword = document.getElementById('auth-password');
@@ -952,6 +962,53 @@
       processAndRenderWorkspace();
     }
 
+    // Unified User Session Manager (Handles both Cloud sync and local fallbacks)
+    function handleUserSession(user) {
+      currentUser = user;
+      globalLoader.classList.add('opacity-0', 'pointer-events-none');
+      
+      // Stop old Firestore snapshot streams to prevent multiple triggers
+      activeFirestoreUnsubscribes.forEach(unsub => unsub());
+      activeFirestoreUnsubscribes = [];
+
+      if (user) {
+        authScreen.classList.add('hidden');
+        appContainer.classList.remove('hidden');
+        
+        if (user.isAnonymous) {
+          userDisplay.innerText = "Guest Offline Account";
+          btnSyncStatus.innerHTML = `<i class="fa-solid fa-floppy-disk text-slate-400" title="Offline Mode"></i>`;
+          loadAndRenderOfflineWorkspace();
+        } else {
+          userDisplay.innerText = user.email;
+          btnSyncStatus.innerHTML = `<i class="fa-solid fa-cloud text-emerald-400" title="Data Synced"></i>`;
+          
+          if (firebaseEnabled) {
+            const unsub1 = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'priorities'), (snap) => {
+              itemsData = []; 
+              snap.forEach(d => itemsData.push(d.data()));
+              processAndRenderWorkspace();
+            }, (err) => console.warn("Firestore priorities stream error:", err));
+            
+            const unsub2 = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'subjects'), (snap) => {
+              subjectsData = []; 
+              snap.forEach(d => subjectsData.push(d.data()));
+              activeDroppedSubjectFilters = subjectsData.filter(s => s.isDroppedInMainList).map(s => s.id);
+              renderSubjectsTree();
+              processAndRenderWorkspace();
+            }, (err) => console.warn("Firestore subjects stream error:", err));
+
+            activeFirestoreUnsubscribes.push(unsub1, unsub2);
+          } else {
+            loadAndRenderOfflineWorkspace();
+          }
+        }
+      } else {
+        appContainer.classList.add('hidden');
+        authScreen.classList.remove('hidden');
+      }
+    }
+
     // AUTH SEED ROUTINES LIFECYCLE WATCHERS
     window.addEventListener('DOMContentLoaded', () => {
       // Run UI reconciler regularly (every 1 second) to smoothly animate priority progress bars over time
@@ -959,44 +1016,124 @@
 
       if (firebaseEnabled) {
         onAuthStateChanged(auth, (user) => {
-          globalLoader.classList.add('opacity-0', 'pointer-events-none');
-          if (user) {
-            currentUser = user;
-            authScreen.classList.add('hidden');
-            appContainer.classList.remove('hidden');
-            document.getElementById('user-display').innerText = user.isAnonymous ? "Guest Offline Account" : user.email;
-            
-            // Connect Synchronized Real-time Firestore Channels
-            onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'priorities'), (snap) => {
-              itemsData = []; snap.forEach(d => itemsData.push(d.data()));
-              processAndRenderWorkspace();
-            });
-            onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'subjects'), (snap) => {
-              subjectsData = []; snap.forEach(d => subjectsData.push(d.data()));
-              activeDroppedSubjectFilters = subjectsData.filter(s => s.isDroppedInMainList).map(s => s.id);
-              renderSubjectsTree();
-              processAndRenderWorkspace();
-            });
-
-          } else {
-            appContainer.classList.add('hidden');
-            authScreen.classList.remove('hidden');
-          }
+          handleUserSession(user);
         });
       } else {
-        globalLoader.classList.add('opacity-0', 'pointer-events-none');
-        appContainer.classList.remove('hidden');
-        loadAndRenderOfflineWorkspace();
+        handleUserSession(null);
       }
     });
 
-    document.getElementById('btn-guest').addEventListener('click', () => {
-      if (firebaseEnabled) signInAnonymously(auth);
-      else loadAndRenderOfflineWorkspace();
+    // Email/Password Log In Button Listener
+    btnLogin.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const email = authEmail.value.trim();
+      const password = authPassword.value;
+      
+      if (!email || !password) {
+        authErrorMsg.innerText = "Please fill in both your email and password!";
+        authErrorMsg.classList.remove('hidden');
+        return;
+      }
+
+      globalLoader.classList.remove('opacity-0', 'pointer-events-none');
+      authErrorMsg.classList.add('hidden');
+
+      if (firebaseEnabled) {
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+          let friendlyError = "Oops! We couldn't log you in. Please check your email and password.";
+          if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+            friendlyError = "Hmm, that email or password doesn't match our records. Please try again!";
+          } else if (error.code === 'auth/invalid-email') {
+            friendlyError = "That doesn't look like a valid email address. Double check the spelling!";
+          }
+          authErrorMsg.innerText = friendlyError;
+          authErrorMsg.classList.remove('hidden');
+          globalLoader.classList.add('opacity-0', 'pointer-events-none');
+        }
+      } else {
+        globalLoader.classList.add('opacity-0', 'pointer-events-none');
+        onUserAuthenticated({ email: email, uid: "mock_user_" + email.replace(/[^a-zA-Z0-9]/g, "") });
+      }
     });
 
-    document.getElementById('btn-logout').addEventListener('click', () => {
-      if (firebaseEnabled) signOut(auth);
+    // Email/Password Registration Button Listener
+    btnRegister.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const email = authEmail.value.trim();
+      const password = authPassword.value;
+
+      if (!email || password.length < 6) {
+        authErrorMsg.innerText = "Please make sure your password is at least 6 characters long!";
+        authErrorMsg.classList.remove('hidden');
+        return;
+      }
+
+      globalLoader.classList.remove('opacity-0', 'pointer-events-none');
+      authErrorMsg.classList.add('hidden');
+
+      if (firebaseEnabled) {
+        try {
+          await createUserWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+          let friendlyError = "Oops! We couldn't create your account. Please try again.";
+          if (error.code === 'auth/email-already-in-use') {
+            friendlyError = "This email is already registered. Try logging in instead!";
+          } else if (error.code === 'auth/invalid-email') {
+            friendlyError = "Please enter a valid email address.";
+          }
+          authErrorMsg.innerText = friendlyError;
+          authErrorMsg.classList.remove('hidden');
+          globalLoader.classList.add('opacity-0', 'pointer-events-none');
+        }
+      } else {
+        globalLoader.classList.add('opacity-0', 'pointer-events-none');
+        onUserAuthenticated({ email: email, uid: "mock_user_" + email.replace(/[^a-zA-Z0-9]/g, "") });
+      }
+    });
+
+    // Google Pop-Up Sign-In Button Listener
+    btnGoogle.addEventListener('click', async () => {
+      if (!firebaseEnabled) {
+        onUserAuthenticated({ email: "google.user@domain.com", uid: "mock_google_user" });
+        return;
+      }
+
+      globalLoader.classList.remove('opacity-0', 'pointer-events-none');
+      authErrorMsg.classList.add('hidden');
+
+      try {
+        const provider = new google.firebase.auth.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        await google.firebase.auth.signInWithPopup(auth, provider);
+      } catch (error) {
+        let errorMessage = "Could not sign in with Google. Please try again.";
+        if (error.code === 'auth/popup-blocked') {
+          errorMessage = "The login popup was blocked. If you are using this inside a Google Site, please sign in with your email and password instead.";
+        }
+        authErrorMsg.innerText = errorMessage;
+        authErrorMsg.classList.remove('hidden');
+        globalLoader.classList.add('opacity-0', 'pointer-events-none');
+      }
+    });
+
+    // Offline Guest Log In Listener
+    btnGuest.addEventListener('click', () => {
+      if (firebaseEnabled) signInAnonymously(auth);
+      else handleAnonymousGuestSession();
+    });
+
+    // Log Out Session Handler
+    btnLogout.addEventListener('click', () => {
+      if (confirm("Are you sure you want to sign out?")) {
+        if (firebaseEnabled) signOut(auth);
+        else {
+          currentUser = null;
+          appContainer.classList.add('hidden');
+          authScreen.classList.remove('hidden');
+        }
+      }
     });
   </script>
 </body>

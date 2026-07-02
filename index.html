@@ -177,7 +177,7 @@
             <span id="list-counter" class="text-xs text-slate-400 font-medium">0 items</span>
           </div>
 
-          <div id="items-list-container" class="space-y-2.5"></div>
+          <div id="items-list-container" class="space-y-2.5 min-h-[150px]"></div>
 
           <div id="empty-state" class="hidden py-12 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl text-center bg-slate-50/20">
             <h3 class="font-bold text-slate-400 text-xs">Drop subjects or add list items below to start planning</h3>
@@ -485,7 +485,20 @@
       }
     };
 
-    // DRAG AND DROP HANDLING OVER MATRIX LAYOUT (Open dropdown status inside list area)
+    // Helper function to update task's associated folder
+    window.updateTaskAssociation = async function(taskId, subjectId) {
+      const item = itemsData.find(i => i.id === taskId);
+      if (item) {
+        item.associatedSubjectId = subjectId;
+        if (firebaseEnabled && currentUser && !currentUser.isAnonymous) {
+          await updateDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'priorities', taskId), { associatedSubjectId: subjectId });
+        } else {
+          saveAndRenderOfflineWorkspace();
+        }
+      }
+    };
+
+    // DRAG AND DROP HANDLING OVER MAIN WORKSPACE
     mainDroptargetList.addEventListener('dragover', (e) => {
       e.preventDefault();
       mainDroptargetList.classList.add('drag-over');
@@ -498,6 +511,15 @@
     mainDroptargetList.addEventListener('drop', async (e) => {
       e.preventDefault();
       mainDroptargetList.classList.remove('drag-over');
+      
+      // Check if we dropped a task card here to move it outside folders
+      const taskId = e.dataTransfer.getData('text/task-id');
+      if (taskId) {
+        await updateTaskAssociation(taskId, null);
+        return;
+      }
+
+      // Otherwise handle subject drop as a group filter
       const subjectId = e.dataTransfer.getData('text/plain') || activeDragSubjectId;
       if (!subjectId) return;
 
@@ -548,7 +570,14 @@
       if (isNew) {
         card = document.createElement('div');
         card.id = cardId;
-        card.className = "task-card flex flex-col p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm gap-2.5 transition-all duration-300";
+        card.className = "task-card flex flex-col p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm gap-2.5 transition-all duration-300 cursor-grab active:cursor-grabbing";
+        card.setAttribute('draggable', 'true');
+        
+        // Let user drag this task to folders
+        card.addEventListener('dragstart', (e) => {
+          e.dataTransfer.setData('text/task-id', item.id);
+        });
+
         card.innerHTML = `
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-2.5 min-w-0 flex-1">
@@ -609,6 +638,7 @@
 
       // Group rendering matching active dropped filters
       const subjectsToRender = subjectsData.filter(s => s.isDroppedInMainList || activeDroppedSubjectFilters.includes(s.id));
+      const activeSubjectIds = new Set(subjectsToRender.map(s => s.id));
       
       // Step 1: Manage subject group wrappers dynamically
       const activeGroupIds = new Set(subjectsToRender.map(s => `group-wrapper-${s.id}`));
@@ -618,14 +648,14 @@
         }
       });
 
-      // Find or build group elements
+      // Find or build group elements and attach task-drop capability to them
       subjectsToRender.forEach(subj => {
         const groupId = `group-wrapper-${subj.id}`;
         let groupWrapper = document.getElementById(groupId);
         if (!groupWrapper) {
           groupWrapper = document.createElement('div');
           groupWrapper.id = groupId;
-          groupWrapper.className = "subject-group-wrapper bg-slate-100/60 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850/80 rounded-2xl p-3 space-y-2 mb-2.5";
+          groupWrapper.className = "subject-group-wrapper bg-slate-100/60 dark:bg-slate-950/40 border-2 border-transparent rounded-2xl p-3 space-y-2 mb-2.5 transition-all duration-200";
           groupWrapper.innerHTML = `
             <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-1.5 mb-1">
               <span class="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
@@ -633,8 +663,28 @@
               </span>
               <button onclick="removeSubjectFilterFromMainList('${subj.id}')" class="text-slate-400 hover:text-rose-500 text-[10px] font-bold">Remove Group</button>
             </div>
-            <div id="group-container-${subj.id}" class="space-y-2.5"></div>
+            <div id="group-container-${subj.id}" class="space-y-2.5 min-h-[50px] transition-all"></div>
           `;
+
+          // Handle task card drop to place inside this folder
+          groupWrapper.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            groupWrapper.classList.add('border-indigo-500', 'bg-indigo-50/20', 'dark:bg-indigo-950/15');
+          });
+
+          groupWrapper.addEventListener('dragleave', () => {
+            groupWrapper.classList.remove('border-indigo-500', 'bg-indigo-50/20', 'dark:bg-indigo-950/15');
+          });
+
+          groupWrapper.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            groupWrapper.classList.remove('border-indigo-500', 'bg-indigo-50/20', 'dark:bg-indigo-950/15');
+            const taskId = e.dataTransfer.getData('text/task-id');
+            if (taskId) {
+              await updateTaskAssociation(taskId, subj.id);
+            }
+          });
+
           itemsListContainer.appendChild(groupWrapper);
         }
         groupWrapper.querySelector('.group-title').innerText = subj.name;
@@ -684,6 +734,14 @@
         }
 
         return { item, liveComputedPriority, scalingStatsLog };
+      }).filter(p => {
+        // HIDE TASKS: If task belongs to a subject, but that subject is currently hidden/removed, hide the task too!
+        if (p.item.associatedSubjectId && !activeSubjectIds.has(p.item.associatedSubjectId)) {
+          const oldCard = document.getElementById(`task-card-${p.item.id}`);
+          if (oldCard) oldCard.remove();
+          return false;
+        }
+        return true;
       });
 
       // Sort items: Priority descending, then alphabetically
@@ -809,12 +867,13 @@
 
       const basePriority = parseInt(inputPrioritySlider.value) || 0;
       
+      // Make all new tasks start OUTSIDE of any subject folders
       const payload = {
         id: crypto.randomUUID(),
         name: name,
         priority: basePriority,
         createdAt: new Date().toISOString(),
-        associatedSubjectId: activeDroppedSubjectFilters[0] || null // Binds implicitly to the active filtered drop zone context if open
+        associatedSubjectId: null 
       };
 
       // Advanced Form Configurations Mapping Check parsing

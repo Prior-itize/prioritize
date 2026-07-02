@@ -114,8 +114,16 @@
   </div>
 
   <!-- APPLICATION CONTAINER -->
-  <div id="app-container" class="hidden h-full flex flex-col justify-between max-w-6xl mx-auto w-full bg-white dark:bg-slate-900 md:shadow-[0_12px_40px_rgba(0,0,0,0.18)] dark:md:shadow-[0_12px_40px_rgba(0,0,0,0.6)] transition-colors duration-200">
+  <div id="app-container" class="hidden h-full flex flex-col justify-between max-w-6xl mx-auto w-full bg-white dark:bg-slate-900 md:shadow-[0_12px_40px_rgba(0,0,0,0.18)] dark:md:shadow-[0_12px_40px_rgba(0,0,0,0.6)] transition-colors duration-200 relative">
     
+    <!-- DRAG-OUTSIDE VISUAL OVERLAY HIGHLIGHT TARGET -->
+    <div id="move-to-main-dropzone" class="hidden fixed md:absolute z-50 border-2 border-dashed border-indigo-500/60 bg-indigo-50/30 dark:bg-indigo-950/20 flex flex-col items-center justify-center transition-all duration-300 rounded-xl pointer-events-auto left-72 md:left-auto right-0 top-0 bottom-0 md:inset-4 shadow-sm">
+      <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-5 py-3.5 shadow-md flex flex-col items-center gap-2 max-w-[200px] text-center">
+        <i class="fa-solid fa-folder-open text-indigo-500 text-2xl animate-bounce"></i>
+        <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Move to Main List</span>
+      </div>
+    </div>
+
     <header class="bg-slate-100/90 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-4 py-3 flex items-center justify-between sticky top-0 z-20">
       <div class="flex items-center gap-1.5">
         <!-- Expandable Menu Drawer Trigger button (only visible on mobile) -->
@@ -310,7 +318,7 @@
     let subjectsData = []; 
     let activeDroppedSubjectFilters = []; 
     let activeDragSubjectId = null;
-    let activeDragTaskId = null; // Drag tracking variable for tasks
+    let activeDragTaskId = null; // Stable Drag tracking variable for tasks
     let activeFirestoreUnsubscribes = [];
 
     // DOM Binding Elements
@@ -359,6 +367,7 @@
     const btnCloseSidebar = document.getElementById('btn-close-sidebar');
     const sidebarPanel = document.getElementById('sidebar-panel');
     const sidebarOverlay = document.getElementById('sidebar-overlay');
+    const moveToMainDropzone = document.getElementById('move-to-main-dropzone');
 
     // Initialization block
     try {
@@ -441,13 +450,12 @@
       }
       inputSubjectName.value = '';
 
-      // Auto-close mobile sidebar drawer after successfully creating a folder so you can see the planner
       if (window.innerWidth < 768) {
         toggleMobileSidebar(false);
       }
     });
 
-    // NESTED RENDER PIPELINE FOR SUBJECT TREE BAR SIDEBAR (Closed dropdown style rules)
+    // NESTED RENDER PIPELINE FOR SUBJECT TREE BAR SIDEBAR
     function renderSubjectsTree() {
       subjectsTreeRoot.innerHTML = '';
       subjectCountBadge.innerText = `(${subjectsData.length}/891)`;
@@ -458,31 +466,49 @@
       });
     }
 
+    // Safe dataset attributes added and drag helper handlers implemented
     function buildSubjectDOMNode(subject, level) {
       const container = document.createElement('div');
       container.className = "space-y-1 pl-1.5 py-0.5 border-l border-slate-200/60 dark:border-slate-800/60 ml-1";
       
       const nodeEl = document.createElement('div');
-      nodeEl.className = "group flex items-center justify-between text-xs font-medium px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg cursor-grab transition hover:border-indigo-500 shadow-sm";
+      nodeEl.className = "group flex items-center justify-between text-xs font-medium px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg cursor-grab transition hover:border-indigo-500 shadow-sm relative drag-subject-element";
       nodeEl.setAttribute('draggable', 'true');
+      nodeEl.setAttribute('data-subject-id', subject.id);
       
-      // Drag lifecycle handles (Universal text/plain mapping for computer and touch screen)
       nodeEl.addEventListener('dragstart', (e) => {
         activeDragSubjectId = subject.id;
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', 'subject:' + subject.id);
+        
+        // Show visual highlight overlay drop target ONLY for mobile users
+        if (moveToMainDropzone && window.innerWidth < 768) {
+          moveToMainDropzone.classList.remove('hidden');
+        }
+        nodeEl.classList.add('z-50', 'opacity-50');
       });
 
       nodeEl.addEventListener('dragend', () => {
         activeDragSubjectId = null;
+        if (moveToMainDropzone) {
+          moveToMainDropzone.classList.add('hidden');
+        }
+        nodeEl.classList.remove('z-50', 'opacity-50');
+      });
+
+      // Mobile Tap Toggle Fallback Integration
+      nodeEl.addEventListener('click', (e) => {
+        if (!e.target.closest('button') && window.innerWidth < 768) {
+          toggleSubjectInMainList(subject.id);
+        }
       });
 
       nodeEl.innerHTML = `
-        <div class="flex items-center gap-1.5 truncate">
+        <div class="flex items-center gap-1.5 truncate pointer-events-none">
           <i class="fa-solid fa-folder-closed text-slate-400 dark:text-slate-600 text-[11px]"></i>
           <span class="truncate font-semibold text-slate-700 dark:text-slate-300">${subject.name}</span>
         </div>
-        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div class="flex items-center gap-1 md:opacity-0 group-hover:opacity-100 transition-opacity">
           ${level < 9 ? `<button onclick="triggerInlineSubnest('${subject.id}', ${level})" class="w-4 h-4 rounded hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center text-[9px] text-slate-500" title="Add a sub-subject"><i class="fa-solid fa-plus"></i></button>` : ''}
           <button onclick="deleteSubject('${subject.id}')" class="w-4 h-4 rounded hover:bg-rose-50 dark:hover:bg-rose-950 text-[9px] text-slate-400 hover:text-rose-500 flex items-center justify-center"><i class="fa-solid fa-trash"></i></button>
         </div>
@@ -490,13 +516,27 @@
 
       container.appendChild(nodeEl);
 
-      // Recursive Subnest mapping calls
       const subChildren = subjectsData.filter(s => s.parentId === subject.id);
       subChildren.forEach(child => {
         container.appendChild(buildSubjectDOMNode(child, level + 1));
       });
 
       return container;
+    }
+
+    async function toggleSubjectInMainList(subjectId) {
+      if (!activeDroppedSubjectFilters.includes(subjectId)) {
+        activeDroppedSubjectFilters.push(subjectId);
+        if (firebaseEnabled && currentUser && !currentUser.isAnonymous) {
+          await updateDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'subjects', subjectId), { isDroppedInMainList: true });
+        } else {
+          const sub = subjectsData.find(s => s.id === subjectId);
+          if (sub) sub.isDroppedInMainList = true;
+          saveAndRenderOfflineWorkspace();
+        }
+      } else {
+        removeSubjectFilterFromMainList(subjectId);
+      }
     }
 
     // GLOBAL INLINE UTILITIES EXPOSED TO DOM
@@ -522,7 +562,6 @@
         saveAndRenderOfflineWorkspace();
       }
 
-      // Smoothly close drawer on phone after sub-folder creation
       if (window.innerWidth < 768) {
         toggleMobileSidebar(false);
       }
@@ -550,7 +589,6 @@
       }
     };
 
-    // Helper function to update task's associated folder
     window.updateTaskAssociation = async function(taskId, subjectId) {
       const item = itemsData.find(i => i.id === taskId);
       if (item) {
@@ -582,27 +620,21 @@
       let taskId = null;
       let subjectId = null;
 
-      // Unpack standardized string payloads
       if (rawData) {
-        if (rawData.startsWith('task:')) {
-          taskId = rawData.substring(5);
-        } else if (rawData.startsWith('subject:')) {
-          subjectId = rawData.substring(8);
-        }
+        if (rawData.startsWith('task:')) taskId = rawData.substring(5);
+        else if (rawData.startsWith('subject:')) subjectId = rawData.substring(8);
       }
 
-      // Safe JS memory backups
+      // Seamless runtime fallback checks
       if (!taskId && activeDragTaskId) taskId = activeDragTaskId;
       if (!subjectId && activeDragSubjectId) subjectId = activeDragSubjectId;
 
-      // Handle Task Card Drop (Move it back outside all folders)
       if (taskId) {
         await updateTaskAssociation(taskId, null);
         activeDragTaskId = null;
         return;
       }
 
-      // Handle Subject Folder Drop (Add to priority filter groups)
       if (subjectId) {
         if (!activeDroppedSubjectFilters.includes(subjectId)) {
           activeDroppedSubjectFilters.push(subjectId);
@@ -618,32 +650,74 @@
       }
     });
 
-    // TIME PARSE UTILITY ENGINE: Converts custom strings formatted DD/HH/MM into Milliseconds
+    // DRAG AND DROP HANDLING FOR HIGHLIGHTED OVERLAY
+    if (moveToMainDropzone) {
+      moveToMainDropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        moveToMainDropzone.classList.add('bg-indigo-100/50', 'dark:bg-indigo-900/30', 'border-indigo-500');
+      });
+
+      moveToMainDropzone.addEventListener('dragleave', (e) => {
+        e.stopPropagation();
+        moveToMainDropzone.classList.remove('bg-indigo-100/50', 'dark:bg-indigo-900/30', 'border-indigo-500');
+      });
+
+      moveToMainDropzone.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        moveToMainDropzone.classList.remove('bg-indigo-100/50', 'dark:bg-indigo-900/30', 'border-indigo-500');
+        moveToMainDropzone.classList.add('hidden');
+        
+        const rawData = e.dataTransfer.getData('text/plain');
+        let subjectId = null;
+
+        if (rawData && rawData.startsWith('subject:')) {
+          subjectId = rawData.substring(8);
+        }
+        if (!subjectId && activeDragSubjectId) {
+          subjectId = activeDragSubjectId;
+        }
+
+        if (subjectId) {
+          if (!activeDroppedSubjectFilters.includes(subjectId)) {
+            activeDroppedSubjectFilters.push(subjectId);
+            if (firebaseEnabled && currentUser && !currentUser.isAnonymous) {
+              await updateDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'subjects', subjectId), { isDroppedInMainList: true });
+            } else {
+              const sub = subjectsData.find(s => s.id === subjectId);
+              if (sub) sub.isDroppedInMainList = true;
+              saveAndRenderOfflineWorkspace();
+            }
+          }
+          activeDragSubjectId = null;
+        }
+
+        // Close mobile sidebar panel if open on mobile
+        if (window.innerWidth < 768) {
+          toggleMobileSidebar(false);
+        }
+      });
+    }
+
     function parseDurationStringtoMs(str) {
       const regex = /^(\d+)\/(\d+)\/(\d+)$/;
       const match = String(str).trim().match(regex);
       if (!match) return 0;
-
       const days = parseInt(match[1]) || 0;
       const hours = parseInt(match[2]) || 0;
       const minutes = parseInt(match[3]) || 0;
-
-      // Calculate total time parameter in milliseconds
       return ((days * 24 * 60 * 60) + (hours * 60 * 60) + (minutes * 60)) * 1000;
     }
 
-    // Dynamic color picker helper for the newly added priority bars
     function getProgressBarColor(priority) {
-      if (priority >= 80) {
-        return "bg-rose-500";
-      } else if (priority <= 30) {
-        return "bg-emerald-500";
-      } else {
-        return "bg-indigo-500";
-      }
+      if (priority >= 80) return "bg-rose-500";
+      else if (priority <= 30) return "bg-emerald-500";
+      else return "bg-indigo-500";
     }
 
-    // Helper to render, update, or animate a single task card smoothly
+    // TASK CARD COMPONENT GENERATOR
     function renderTaskCard(item, liveComputedPriority, scalingStatsLog) {
       const cardId = `task-card-${item.id}`;
       let card = document.getElementById(cardId);
@@ -653,44 +727,50 @@
       if (isNew) {
         card = document.createElement('div');
         card.id = cardId;
-        card.className = "task-card flex flex-col p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-md gap-2.5 transition-all duration-300 cursor-grab active:cursor-grabbing hover:shadow-lg";
+        card.className = "task-card flex flex-col p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-md gap-2.5 transition-all duration-300 cursor-grab active:cursor-grabbing hover:shadow-lg relative";
         card.setAttribute('draggable', 'true');
+        card.setAttribute('data-task-id', item.id);
         
-        // Setup Drag listeners
         card.addEventListener('dragstart', (e) => {
           activeDragTaskId = item.id;
           e.dataTransfer.effectAllowed = 'move';
           e.dataTransfer.setData('text/plain', 'task:' + item.id);
+          card.classList.add('z-50', 'opacity-50');
         });
 
         card.addEventListener('dragend', () => {
           activeDragTaskId = null;
+          card.classList.remove('z-50', 'opacity-50');
+        });
+
+        card.addEventListener('click', (e) => {
+          if (!e.target.closest('button') && !e.target.closest('input[type="checkbox"]') && window.innerWidth < 768) {
+            triggerMobileTaskMoveMenu(item);
+          }
         });
 
         card.innerHTML = `
-          <div class="flex items-center justify-between gap-3">
-            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+          <div class="flex items-center justify-between gap-3 pointer-events-none">
+            <div class="flex items-center gap-2.5 min-w-0 flex-1 pointer-events-auto">
               <input type="checkbox" data-item-id="${item.id}" class="task-select-checkbox accent-indigo-500 rounded cursor-pointer">
               <div class="truncate">
                 <span class="task-name text-xs font-bold text-slate-800 dark:text-slate-200 block truncate"></span>
                 <span class="task-log text-[9px] font-semibold text-indigo-500 block mt-0.5 hidden"></span>
               </div>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
+            <div class="flex items-center gap-2 shrink-0 pointer-events-auto">
               <span class="task-priority-badge text-xs font-black bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-2 py-1 rounded-lg transition-all duration-300"></span>
               <button onclick="deleteActionTask('${item.id}')" class="w-6 h-6 rounded bg-slate-50 dark:bg-slate-950 text-slate-400 hover:text-rose-500 flex items-center justify-center text-xs"><i class="fa-solid fa-trash-can"></i></button>
             </div>
           </div>
-          <div class="w-full bg-slate-100 dark:bg-slate-950 h-1 rounded-full overflow-hidden">
+          <div class="w-full bg-slate-100 dark:bg-slate-950 h-1 rounded-full overflow-hidden pointer-events-none">
             <div class="progress-bar-fill h-full rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
           </div>
         `;
       }
 
-      // Update name text
       card.querySelector('.task-name').innerText = item.name;
 
-      // Update timer labels safely
       const logEl = card.querySelector('.task-log');
       if (scalingStatsLog) {
         logEl.innerHTML = `<i class="fa-solid fa-clock-rotate-left"></i> ${scalingStatsLog}`;
@@ -699,45 +779,46 @@
         logEl.classList.add('hidden');
       }
 
-      // Update the badge values and colors smoothly
       const badge = card.querySelector('.task-priority-badge');
       badge.innerText = `${liveComputedPriority}%`;
       badge.className = `task-priority-badge text-xs font-black bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-2 py-1 rounded-lg transition-all duration-300 ${
         liveComputedPriority >= 80 ? 'text-rose-500' : liveComputedPriority <= 30 ? 'text-emerald-500' : 'text-indigo-600 dark:text-indigo-400'
       }`;
 
-      // Update the progress bar width with a tiny safety timeout for first render animation
       const bar = card.querySelector('.progress-bar-fill');
       bar.className = `progress-bar-fill h-full rounded-full transition-all duration-500 ease-out ${barColorClass}`;
-      if (isNew) {
-        setTimeout(() => {
-          bar.style.width = `${liveComputedPriority}%`;
-        }, 50);
-      } else {
-        bar.style.width = `${liveComputedPriority}%`;
-      }
+      bar.style.width = `${liveComputedPriority}%`;
 
       return card;
     }
 
-    // MAIN WORKSPACE RECALCULATION & COMBINED TASK LIST PIPELINE RENDERER (Now smoothly updates without wiping list)
+    window.triggerMobileTaskMoveMenu = async function(task) {
+      if (subjectsData.length === 0) {
+        alert("Create folder routes in your sidebar first to sort this item!");
+        return;
+      }
+      let menuOptions = "Type folder sequence index to move task:\n\n0: [Remove from all folders]\n";
+      subjectsData.forEach((sub, i) => { menuOptions += `${i + 1}: ${sub.name}\n`; });
+      const choice = prompt(menuOptions);
+      if (choice === null) return;
+      const num = parseInt(choice);
+      if (num === 0) await updateTaskAssociation(task.id, null);
+      else if (num > 0 && num <= subjectsData.length) await updateTaskAssociation(task.id, subjectsData[num - 1].id);
+    };
+
+    // MAIN WORKSPACE RECALCULATION & COMBINED TASK LIST PIPELINE RENDERER (Renamed "Remove Group" to "Minimize Group")
     function processAndRenderWorkspace() {
       const now = new Date();
       let displayedItemsCount = 0;
 
-      // Group rendering matching active dropped filters
       const subjectsToRender = subjectsData.filter(s => s.isDroppedInMainList || activeDroppedSubjectFilters.includes(s.id));
       const activeSubjectIds = new Set(subjectsToRender.map(s => s.id));
       
-      // Step 1: Manage subject group wrappers dynamically
       const activeGroupIds = new Set(subjectsToRender.map(s => `group-wrapper-${s.id}`));
       document.querySelectorAll('.subject-group-wrapper').forEach(group => {
-        if (!activeGroupIds.has(group.id)) {
-          group.remove();
-        }
+        if (!activeGroupIds.has(group.id)) group.remove();
       });
 
-      // Find or build group elements and attach task-drop capability to them
       subjectsToRender.forEach(subj => {
         const groupId = `group-wrapper-${subj.id}`;
         let groupWrapper = document.getElementById(groupId);
@@ -750,34 +831,34 @@
               <span class="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
                 <i class="fa-solid fa-folder-open"></i> <span class="group-title"></span> <span class="text-[10px] font-medium text-slate-400">(Subject Group)</span>
               </span>
-              <button onclick="removeSubjectFilterFromMainList('${subj.id}')" class="text-slate-400 hover:text-rose-500 text-[10px] font-bold">Remove Group</button>
+              <button onclick="removeSubjectFilterFromMainList('${subj.id}')" class="text-slate-400 hover:text-rose-500 text-[10px] font-bold">Minimize Group</button>
             </div>
             <div id="group-container-${subj.id}" class="space-y-2.5 min-h-[50px] transition-all"></div>
           `;
 
-          // Handle task card drop to place inside this folder
+          // DRAGOVER AND DRAGLEAVE PREVENT BUBBLING TO PARENT CONTAINER
           groupWrapper.addEventListener('dragover', (e) => {
             e.preventDefault();
+            e.stopPropagation(); // Stop parent main list container from lighting up as drop target
             e.dataTransfer.dropEffect = 'move';
             groupWrapper.classList.add('border-indigo-500', 'bg-indigo-50/20', 'dark:bg-indigo-950/15');
           });
 
-          groupWrapper.addEventListener('dragleave', () => {
+          groupWrapper.addEventListener('dragleave', (e) => {
+            e.stopPropagation();
             groupWrapper.classList.remove('border-indigo-500', 'bg-indigo-50/20', 'dark:bg-indigo-950/15');
           });
 
+          // DROP PREVENTS BUBBLING (CRITICAL: prevents reset of task association to null!)
           groupWrapper.addEventListener('drop', async (e) => {
             e.preventDefault();
+            e.stopPropagation(); // Stop parent drop listener from resetting task assignment
             groupWrapper.classList.remove('border-indigo-500', 'bg-indigo-50/20', 'dark:bg-indigo-950/15');
             
             const rawData = e.dataTransfer.getData('text/plain');
             let taskId = null;
-            if (rawData && rawData.startsWith('task:')) {
-              taskId = rawData.substring(5);
-            }
-            if (!taskId && activeDragTaskId) {
-              taskId = activeDragTaskId;
-            }
+            if (rawData && rawData.startsWith('task:')) taskId = rawData.substring(5);
+            if (!taskId && activeDragTaskId) taskId = activeDragTaskId;
 
             if (taskId) {
               await updateTaskAssociation(taskId, subj.id);
@@ -790,9 +871,7 @@
         groupWrapper.querySelector('.group-title').innerText = subj.name;
       });
 
-      // Step 2: Calculate dynamic scaling levels & prepare tasks array
       const processedItems = itemsData.map(item => {
-        // Calculate Recurrence loops if needed
         if (item.recurrence && item.recurrence.enabled) {
           const nextTrigger = new Date(item.recurrence.nextOccurrenceDate);
           if (now >= nextTrigger) {
@@ -810,7 +889,6 @@
           }
         }
 
-        // Parse automatic change calculations
         let liveComputedPriority = parseInt(item.priority) || 0;
         let scalingStatsLog = "";
 
@@ -819,7 +897,6 @@
           const currentMs = now.getTime();
           const targetValue = parseInt(item.dynamicScale.targetPriority) || 0;
           const totalDuration = item.dynamicScale.durationMs;
-
           const elapsedMs = currentMs - genesisMs;
           if (elapsedMs >= totalDuration) {
             liveComputedPriority = targetValue;
@@ -835,7 +912,6 @@
 
         return { item, liveComputedPriority, scalingStatsLog };
       }).filter(p => {
-        // HIDE TASKS: If task belongs to a subject, but that subject is currently hidden/removed, hide the task too!
         if (p.item.associatedSubjectId && !activeSubjectIds.has(p.item.associatedSubjectId)) {
           const oldCard = document.getElementById(`task-card-${p.item.id}`);
           if (oldCard) oldCard.remove();
@@ -844,42 +920,29 @@
         return true;
       });
 
-      // Sort items: Priority descending, then alphabetically
       processedItems.sort((a, b) => {
         const priorityDiff = b.liveComputedPriority - a.liveComputedPriority;
         if (priorityDiff !== 0) return priorityDiff;
         return a.item.name.localeCompare(b.item.name);
       });
 
-      // Remove task cards from DOM that were deleted or are no longer active
       const currentTaskIds = new Set(processedItems.map(p => `task-card-${p.item.id}`));
       document.querySelectorAll('.task-card').forEach(card => {
-        if (!currentTaskIds.has(card.id)) {
-          card.remove();
-        }
+        if (!currentTaskIds.has(card.id)) card.remove();
       });
 
-      // Step 3: Populate sorted cards smoothly into their containers
       processedItems.forEach(p => {
         displayedItemsCount++;
         const card = renderTaskCard(p.item, p.liveComputedPriority, p.scalingStatsLog);
-        
         const hasContainer = p.item.associatedSubjectId && document.getElementById(`group-container-${p.item.associatedSubjectId}`);
-        const targetContainer = hasContainer 
-          ? document.getElementById(`group-container-${p.item.associatedSubjectId}`) 
-          : itemsListContainer;
-
-        if (targetContainer) {
-          targetContainer.appendChild(card);
-        }
+        const targetContainer = hasContainer ? document.getElementById(`group-container-${p.item.associatedSubjectId}`) : itemsListContainer;
+        if (targetContainer) targetContainer.appendChild(card);
       });
 
-      // Evaluate empty state and update metrics counter
       emptyState.classList.toggle('hidden', displayedItemsCount > 0);
       document.getElementById('list-counter').innerText = `${displayedItemsCount} tasks active`;
     }
 
-    // EXPOSED GLOBAL UTILITY MODIFIERS INTERFACES
     window.removeSubjectFilterFromMainList = async function(id) {
       activeDroppedSubjectFilters = activeDroppedSubjectFilters.filter(f => f !== id);
       if (firebaseEnabled && currentUser && !currentUser.isAnonymous) {
@@ -900,7 +963,6 @@
       }
     };
 
-    // BATCH OPERATION UTILITY CONTROLLER (GMAIL BOX CHECK SYSTEM)
     checkboxSelectAll.addEventListener('change', (e) => {
       document.querySelectorAll('.task-select-checkbox').forEach(box => {
         box.checked = e.target.checked;
@@ -913,28 +975,22 @@
         alert("Please check at least one task row to apply the batch changes.");
         return;
       }
-
       for (let box of selectedBoxes) {
         const id = box.getAttribute('data-item-id');
         const item = itemsData.find(i => i.id === id);
         if (item) {
           let updatedPriority = (parseInt(item.priority) || 0) + percentageDelta;
           updatedPriority = Math.max(0, Math.min(100, updatedPriority));
-          
           item.priority = updatedPriority;
           if (firebaseEnabled && currentUser && !currentUser.isAnonymous) {
             await updateDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'priorities', id), { priority: updatedPriority });
           }
         }
       }
-
-      if (!firebaseEnabled || currentUser?.isAnonymous) {
-        saveAndRenderOfflineWorkspace();
-      }
+      if (!firebaseEnabled || currentUser?.isAnonymous) saveAndRenderOfflineWorkspace();
       checkboxSelectAll.checked = false;
     };
 
-    // Theme Switcher Logic
     function initTheme() {
       const storedTheme = localStorage.getItem('prioritizeit_theme') || 'light';
       setTheme(storedTheme);
@@ -959,15 +1015,12 @@
 
     initTheme();
 
-    // SUBMIT FORM ACTION ELEMENT
     addItemForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const name = inputTaskName.value.trim();
       if (!name) return;
 
       const basePriority = parseInt(inputPrioritySlider.value) || 0;
-      
-      // Make all new tasks start OUTSIDE of any subject folders
       const payload = {
         id: crypto.randomUUID(),
         name: name,
@@ -976,7 +1029,6 @@
         associatedSubjectId: null 
       };
 
-      // Advanced Form Configurations Mapping Check parsing
       if (checkboxEnableScaling.checked) {
         const parsedMs = parseDurationStringtoMs(inputScaleDurationString.value);
         if (parsedMs > 0) {
@@ -997,7 +1049,6 @@
         } else {
           triggerDate = new Date(inputRecurrenceValue.value || new Date());
         }
-
         payload.recurrence = {
           enabled: true,
           type: selectRecurrenceType.value,
@@ -1014,7 +1065,6 @@
         saveAndRenderOfflineWorkspace();
       }
 
-      // Reset Inputs Form elements
       inputTaskName.value = '';
       syncPriorityValues(50);
       checkboxEnableScaling.checked = false;
@@ -1023,21 +1073,14 @@
       recurrenceSubInputs.classList.add('hidden');
     });
 
-    // Bi-directional slider & input sync helper
     function syncPriorityValues(val, origin) {
       let numVal = parseInt(val);
       if (isNaN(numVal)) numVal = 0;
       const clampedVal = Math.max(0, Math.min(100, numVal));
-      
-      if (origin !== 'slider') {
-        inputPrioritySlider.value = clampedVal;
-      }
-      if (origin !== 'number') {
-        inputPriorityNumber.value = clampedVal;
-      }
+      if (origin !== 'slider') inputPrioritySlider.value = clampedVal;
+      if (origin !== 'number') inputPriorityNumber.value = clampedVal;
     }
 
-    // STORAGE OFFLINE WRAPPERS
     function saveAndRenderOfflineWorkspace() {
       localStorage.setItem(`prioritizeit_local_items`, JSON.stringify(itemsData));
       localStorage.setItem(`prioritizeit_local_subjects`, JSON.stringify(subjectsData));
@@ -1052,12 +1095,9 @@
       processAndRenderWorkspace();
     }
 
-    // Unified User Session Manager (Handles both Cloud sync and local fallbacks)
     function handleUserSession(user) {
       currentUser = user;
       globalLoader.classList.add('opacity-0', 'pointer-events-none');
-      
-      // Stop old Firestore snapshot streams to prevent multiple triggers
       activeFirestoreUnsubscribes.forEach(unsub => unsub());
       activeFirestoreUnsubscribes = [];
 
@@ -1087,7 +1127,6 @@
               renderSubjectsTree();
               processAndRenderWorkspace();
             });
-
             activeFirestoreUnsubscribes.push(unsub1, unsub2);
           } else {
             loadAndRenderOfflineWorkspace();
@@ -1099,15 +1138,10 @@
       }
     }
 
-    // AUTH SEED ROUTINES LIFECYCLE WATCHERS
     window.addEventListener('DOMContentLoaded', () => {
-      // Run UI reconciler regularly (every 1 second) to smoothly animate priority progress bars over time
       setInterval(processAndRenderWorkspace, 1000);
-
       if (firebaseEnabled) {
-        onAuthStateChanged(auth, (user) => {
-          handleUserSession(user);
-        });
+        onAuthStateChanged(auth, (user) => { handleUserSession(user); });
       } else {
         globalLoader.classList.add('opacity-0', 'pointer-events-none');
         appContainer.classList.remove('hidden');
@@ -1115,116 +1149,55 @@
       }
     });
 
-    // Email/Password Log In Button Listener
     btnLogin.addEventListener('click', async (e) => {
       e.preventDefault();
       const email = authEmail.value.trim();
       const password = authPassword.value;
-      
-      if (!email || !password) {
-        authErrorMsg.innerText = "Please fill in both your email and password!";
-        authErrorMsg.classList.remove('hidden');
-        return;
-      }
-
+      if (!email || !password) return;
       globalLoader.classList.remove('opacity-0', 'pointer-events-none');
-      authErrorMsg.classList.add('hidden');
-
       if (firebaseEnabled) {
-        try {
-          await signInWithEmailAndPassword(auth, email, password);
-        } catch (error) {
-          let friendlyError = "Oops! We couldn't log you in. Please check your email and password.";
-          if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-            friendlyError = "Hmm, that email or password doesn't match our records. Please try again!";
-          } else if (error.code === 'auth/invalid-email') {
-            friendlyError = "That doesn't look like a valid email address. Double check the spelling!";
-          }
-          authErrorMsg.innerText = friendlyError;
+        try { await signInWithEmailAndPassword(auth, email, password); } catch (error) {
+          authErrorMsg.innerText = "Invalid credentials.";
           authErrorMsg.classList.remove('hidden');
           globalLoader.classList.add('opacity-0', 'pointer-events-none');
         }
-      } else {
-        globalLoader.classList.add('opacity-0', 'pointer-events-none');
-        handleUserSession({ email: email, uid: "mock_user_" + email.replace(/[^a-zA-Z0-9]/g, "") });
       }
     });
 
-    // Email/Password Registration Button Listener
     btnRegister.addEventListener('click', async (e) => {
       e.preventDefault();
       const email = authEmail.value.trim();
       const password = authPassword.value;
-
-      if (!email || password.length < 6) {
-        authErrorMsg.innerText = "Please make sure your password is at least 6 characters long!";
-        authErrorMsg.classList.remove('hidden');
-        return;
-      }
-
+      if (!email || password.length < 6) return;
       globalLoader.classList.remove('opacity-0', 'pointer-events-none');
-      authErrorMsg.classList.add('hidden');
-
       if (firebaseEnabled) {
-        try {
-          await createUserWithEmailAndPassword(auth, email, password);
-        } catch (error) {
-          let friendlyError = "Oops! We couldn't create your account. Please try again.";
-          if (error.code === 'auth/email-already-in-use') {
-            friendlyError = "This email is already registered. Try logging in instead!";
-          } else if (error.code === 'auth/invalid-email') {
-            friendlyError = "Please enter a valid email address.";
-          }
-          authErrorMsg.innerText = friendlyError;
+        try { await createUserWithEmailAndPassword(auth, email, password); } catch (error) {
+          authErrorMsg.innerText = "Error creating account.";
           authErrorMsg.classList.remove('hidden');
           globalLoader.classList.add('opacity-0', 'pointer-events-none');
         }
-      } else {
-        globalLoader.classList.add('opacity-0', 'pointer-events-none');
-        handleUserSession({ email: email, uid: "mock_user_" + email.replace(/[^a-zA-Z0-9]/g, "") });
       }
     });
 
-    // Google Pop-Up Sign-In Button Listener (Fixed to use direct modular imports correctly)
     btnGoogle.addEventListener('click', async () => {
-      if (!firebaseEnabled) {
-        handleUserSession({ email: "google.user@domain.com", uid: "mock_google_user" });
-        return;
-      }
-
+      if (!firebaseEnabled) return;
       globalLoader.classList.remove('opacity-0', 'pointer-events-none');
-      authErrorMsg.classList.add('hidden');
-
       try {
         const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
         await signInWithPopup(auth, provider);
       } catch (error) {
-        let errorMessage = "Could not sign in with Google. Please try again.";
-        if (error.code === 'auth/popup-blocked') {
-          errorMessage = "The login popup was blocked. If you are using this inside a Google Site, please sign in with your email and password instead.";
-        }
-        authErrorMsg.innerText = errorMessage;
-        authErrorMsg.classList.remove('hidden');
         globalLoader.classList.add('opacity-0', 'pointer-events-none');
       }
     });
 
-    // Offline Guest Log In Listener
     btnGuest.addEventListener('click', () => {
       if (firebaseEnabled) signInAnonymously(auth);
       else loadAndRenderOfflineWorkspace();
     });
 
-    // Log Out Session Handler
     btnLogout.addEventListener('click', () => {
       if (confirm("Are you sure you want to sign out?")) {
         if (firebaseEnabled) signOut(auth);
-        else {
-          currentUser = null;
-          appContainer.classList.add('hidden');
-          authScreen.classList.remove('hidden');
-        }
       }
     });
   </script>

@@ -119,7 +119,7 @@
     <header class="bg-slate-100/90 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-4 py-3 flex items-center justify-between sticky top-0 z-20">
       <div class="flex items-center gap-1.5">
         <!-- Expandable Menu Drawer Trigger button (only visible on mobile) -->
-        <button id="btn-mobile-menu" class="md:hidden w-8 h-8 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 shadow-md mr-1 active:scale-95 transition-all">
+        <button id="btn-mobile-menu" class="md:hidden w-8 h-8 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 shadow-sm mr-1 active:scale-95 transition-all">
           <i class="fa-solid fa-bars"></i>
         </button>
 
@@ -466,10 +466,11 @@
       nodeEl.className = "group flex items-center justify-between text-xs font-medium px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg cursor-grab transition hover:border-indigo-500 shadow-sm";
       nodeEl.setAttribute('draggable', 'true');
       
-      // Drag lifecycle handles
+      // Drag lifecycle handles (Universal text/plain mapping for computer and touch screen)
       nodeEl.addEventListener('dragstart', (e) => {
         activeDragSubjectId = subject.id;
-        e.dataTransfer.setData('text/plain', subject.id);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', 'subject:' + subject.id);
       });
 
       nodeEl.addEventListener('dragend', () => {
@@ -565,6 +566,7 @@
     // DRAG AND DROP HANDLING OVER MAIN WORKSPACE
     mainDroptargetList.addEventListener('dragover', (e) => {
       e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
       mainDroptargetList.classList.add('drag-over');
     });
 
@@ -576,27 +578,43 @@
       e.preventDefault();
       mainDroptargetList.classList.remove('drag-over');
       
-      // Check if we dropped a task card here to move it outside folders
-      const taskId = e.dataTransfer.getData('text/task-id') || activeDragTaskId;
+      const rawData = e.dataTransfer.getData('text/plain');
+      let taskId = null;
+      let subjectId = null;
+
+      // Unpack standardized string payloads
+      if (rawData) {
+        if (rawData.startsWith('task:')) {
+          taskId = rawData.substring(5);
+        } else if (rawData.startsWith('subject:')) {
+          subjectId = rawData.substring(8);
+        }
+      }
+
+      // Safe JS memory backups
+      if (!taskId && activeDragTaskId) taskId = activeDragTaskId;
+      if (!subjectId && activeDragSubjectId) subjectId = activeDragSubjectId;
+
+      // Handle Task Card Drop (Move it back outside all folders)
       if (taskId) {
         await updateTaskAssociation(taskId, null);
         activeDragTaskId = null;
         return;
       }
 
-      // Otherwise handle subject drop as a group filter
-      const subjectId = e.dataTransfer.getData('text/plain') || activeDragSubjectId;
-      if (!subjectId) return;
-
-      if (!activeDroppedSubjectFilters.includes(subjectId)) {
-        activeDroppedSubjectFilters.push(subjectId);
-        if (firebaseEnabled && currentUser && !currentUser.isAnonymous) {
-          await updateDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'subjects', subjectId), { isDroppedInMainList: true });
-        } else {
-          const sub = subjectsData.find(s => s.id === subjectId);
-          if (sub) sub.isDroppedInMainList = true;
-          saveAndRenderOfflineWorkspace();
+      // Handle Subject Folder Drop (Add to priority filter groups)
+      if (subjectId) {
+        if (!activeDroppedSubjectFilters.includes(subjectId)) {
+          activeDroppedSubjectFilters.push(subjectId);
+          if (firebaseEnabled && currentUser && !currentUser.isAnonymous) {
+            await updateDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'subjects', subjectId), { isDroppedInMainList: true });
+          } else {
+            const sub = subjectsData.find(s => s.id === subjectId);
+            if (sub) sub.isDroppedInMainList = true;
+            saveAndRenderOfflineWorkspace();
+          }
         }
+        activeDragSubjectId = null;
       }
     });
 
@@ -638,10 +656,11 @@
         card.className = "task-card flex flex-col p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-md gap-2.5 transition-all duration-300 cursor-grab active:cursor-grabbing hover:shadow-lg";
         card.setAttribute('draggable', 'true');
         
-        // Let user drag this task to folders
+        // Setup Drag listeners
         card.addEventListener('dragstart', (e) => {
           activeDragTaskId = item.id;
-          e.dataTransfer.setData('text/task-id', item.id);
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', 'task:' + item.id);
         });
 
         card.addEventListener('dragend', () => {
@@ -739,6 +758,7 @@
           // Handle task card drop to place inside this folder
           groupWrapper.addEventListener('dragover', (e) => {
             e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
             groupWrapper.classList.add('border-indigo-500', 'bg-indigo-50/20', 'dark:bg-indigo-950/15');
           });
 
@@ -749,9 +769,19 @@
           groupWrapper.addEventListener('drop', async (e) => {
             e.preventDefault();
             groupWrapper.classList.remove('border-indigo-500', 'bg-indigo-50/20', 'dark:bg-indigo-950/15');
-            const taskId = e.dataTransfer.getData('text/task-id') || activeDragTaskId; // FIXED: Changed activeDragSubjectId to activeDragTaskId
+            
+            const rawData = e.dataTransfer.getData('text/plain');
+            let taskId = null;
+            if (rawData && rawData.startsWith('task:')) {
+              taskId = rawData.substring(5);
+            }
+            if (!taskId && activeDragTaskId) {
+              taskId = activeDragTaskId;
+            }
+
             if (taskId) {
               await updateTaskAssociation(taskId, subj.id);
+              activeDragTaskId = null;
             }
           });
 

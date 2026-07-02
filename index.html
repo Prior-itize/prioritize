@@ -368,11 +368,11 @@
       if (!name) return;
 
       if (countRootSubjects() >= 99) {
-        alert("Action Restricted: Root boundaries limit reached (Max 99 standalone subjects allowed).");
+        alert("Oops! You can only have up to 99 main folders.");
         return;
       }
       if (subjectsData.length >= 891) {
-        alert("Action Restricted: System limit reached (Max 891 total subjects allowed).");
+        alert("Oops! You've hit the maximum folder limit of 891.");
         return;
       }
 
@@ -442,10 +442,10 @@
     // GLOBAL INLINE UTILITIES EXPOSED TO DOM
     window.triggerInlineSubnest = async function(parentId, currentLevel) {
       if (subjectsData.length >= 891) {
-        alert("Limit reached (Max 891 items total).");
+        alert("Oops! You've hit the maximum folder limit of 891.");
         return;
       }
-      const subName = prompt("Enter sub-subject nested layer name:");
+      const subName = prompt("Enter a name for this sub-subject:");
       if (!subName) return;
 
       const newSub = {
@@ -464,7 +464,7 @@
     };
 
     window.deleteSubject = async function(id) {
-      if (confirm("Delete this subject and all its sub-nested layers?")) {
+      if (confirm("Delete this subject and everything inside it?")) {
         const collectChildrenIds = (targetId) => {
           let list = [targetId];
           subjectsData.filter(s => s.parentId === targetId).forEach(c => {
@@ -538,55 +538,129 @@
       }
     }
 
-    // MAIN WORKSPACE RECALCULATION & COMBINED TASK LIST PIPELINE RENDERER
+    // Helper to render, update, or animate a single task card smoothly
+    function renderTaskCard(item, liveComputedPriority, scalingStatsLog) {
+      const cardId = `task-card-${item.id}`;
+      let card = document.getElementById(cardId);
+      const barColorClass = getProgressBarColor(liveComputedPriority);
+      const isNew = !card;
+
+      if (isNew) {
+        card = document.createElement('div');
+        card.id = cardId;
+        card.className = "task-card flex flex-col p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm gap-2.5 transition-all duration-300";
+        card.innerHTML = `
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+              <input type="checkbox" data-item-id="${item.id}" class="task-select-checkbox accent-indigo-500 rounded cursor-pointer">
+              <div class="truncate">
+                <span class="task-name text-xs font-bold text-slate-800 dark:text-slate-200 block truncate"></span>
+                <span class="task-log text-[9px] font-semibold text-indigo-500 block mt-0.5 hidden"></span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="task-priority-badge text-xs font-black bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-2 py-1 rounded-lg transition-all duration-300"></span>
+              <button onclick="deleteActionTask('${item.id}')" class="w-6 h-6 rounded bg-slate-50 dark:bg-slate-950 text-slate-400 hover:text-rose-500 flex items-center justify-center text-xs"><i class="fa-solid fa-trash-can"></i></button>
+            </div>
+          </div>
+          <div class="w-full bg-slate-100 dark:bg-slate-950 h-1 rounded-full overflow-hidden">
+            <div class="progress-bar-fill h-full rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
+          </div>
+        `;
+      }
+
+      // Update name text
+      card.querySelector('.task-name').innerText = item.name;
+
+      // Update timer labels safely
+      const logEl = card.querySelector('.task-log');
+      if (scalingStatsLog) {
+        logEl.innerHTML = `<i class="fa-solid fa-clock-rotate-left"></i> ${scalingStatsLog}`;
+        logEl.classList.remove('hidden');
+      } else {
+        logEl.classList.add('hidden');
+      }
+
+      // Update the badge values and colors smoothly
+      const badge = card.querySelector('.task-priority-badge');
+      badge.innerText = `${liveComputedPriority}%`;
+      badge.className = `task-priority-badge text-xs font-black bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-2 py-1 rounded-lg transition-all duration-300 ${
+        liveComputedPriority >= 80 ? 'text-rose-500' : liveComputedPriority <= 30 ? 'text-emerald-500' : 'text-indigo-600 dark:text-indigo-400'
+      }`;
+
+      // Update the progress bar width with a tiny safety timeout for first render animation
+      const bar = card.querySelector('.progress-bar-fill');
+      bar.className = `progress-bar-fill h-full rounded-full transition-all duration-500 ease-out ${barColorClass}`;
+      if (isNew) {
+        setTimeout(() => {
+          bar.style.width = `${liveComputedPriority}%`;
+        }, 50);
+      } else {
+        bar.style.width = `${liveComputedPriority}%`;
+      }
+
+      return card;
+    }
+
+    // MAIN WORKSPACE RECALCULATION & COMBINED TASK LIST PIPELINE RENDERER (Now smoothly updates without wiping list)
     function processAndRenderWorkspace() {
-      itemsListContainer.innerHTML = '';
-      
       const now = new Date();
       let displayedItemsCount = 0;
 
       // Group rendering matching active dropped filters
       const subjectsToRender = subjectsData.filter(s => s.isDroppedInMainList || activeDroppedSubjectFilters.includes(s.id));
       
-      // Render Filter Groups
-      subjectsToRender.forEach(subj => {
-        const groupWrapper = document.createElement('div');
-        groupWrapper.className = "bg-slate-100/60 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850/80 rounded-2xl p-3 space-y-2";
-        groupWrapper.innerHTML = `
-          <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-1.5 mb-1">
-            <span class="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-              <i class="fa-solid fa-folder-open"></i> ${subj.name} <span class="text-[10px] font-medium text-slate-400">(Subject Group Open)</span>
-            </span>
-            <button onclick="removeSubjectFilterFromMainList('${subj.id}')" class="text-slate-400 hover:text-rose-500 text-[10px] font-bold">Remove Group</button>
-          </div>
-          <div id="group-container-${subj.id}" class="space-y-2"></div>
-        `;
-        itemsListContainer.appendChild(groupWrapper);
+      // Step 1: Manage subject group wrappers dynamically
+      const activeGroupIds = new Set(subjectsToRender.map(s => `group-wrapper-${s.id}`));
+      document.querySelectorAll('.subject-group-wrapper').forEach(group => {
+        if (!activeGroupIds.has(group.id)) {
+          group.remove();
+        }
       });
 
-      // Render items
-      itemsData.forEach(item => {
+      // Find or build group elements
+      subjectsToRender.forEach(subj => {
+        const groupId = `group-wrapper-${subj.id}`;
+        let groupWrapper = document.getElementById(groupId);
+        if (!groupWrapper) {
+          groupWrapper = document.createElement('div');
+          groupWrapper.id = groupId;
+          groupWrapper.className = "subject-group-wrapper bg-slate-100/60 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850/80 rounded-2xl p-3 space-y-2 mb-2.5";
+          groupWrapper.innerHTML = `
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-1.5 mb-1">
+              <span class="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                <i class="fa-solid fa-folder-open"></i> <span class="group-title"></span> <span class="text-[10px] font-medium text-slate-400">(Subject Group)</span>
+              </span>
+              <button onclick="removeSubjectFilterFromMainList('${subj.id}')" class="text-slate-400 hover:text-rose-500 text-[10px] font-bold">Remove Group</button>
+            </div>
+            <div id="group-container-${subj.id}" class="space-y-2.5"></div>
+          `;
+          itemsListContainer.appendChild(groupWrapper);
+        }
+        groupWrapper.querySelector('.group-title').innerText = subj.name;
+      });
+
+      // Step 2: Calculate dynamic scaling levels & prepare tasks array
+      const processedItems = itemsData.map(item => {
         // Calculate Recurrence loops if needed
         if (item.recurrence && item.recurrence.enabled) {
           const nextTrigger = new Date(item.recurrence.nextOccurrenceDate);
           if (now >= nextTrigger) {
-            // Cycle item window onwards forward
             if (item.recurrence.type === 'days') {
               const deltaDays = parseInt(item.recurrence.value) || 1;
               nextTrigger.setDate(nextTrigger.getDate() + deltaDays);
             } else {
-              // Custom fixed point reset target triggers next year loop iteration
               nextTrigger.setFullYear(nextTrigger.getFullYear() + 1);
             }
             item.recurrence.nextOccurrenceDate = nextTrigger.toISOString();
-            item.priority = item.recurrence.baseResetPriorityValue || item.priority; // Restore priority
+            item.priority = item.recurrence.baseResetPriorityValue || item.priority; 
             if (firebaseEnabled && currentUser && !currentUser.isAnonymous) {
               updateDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'priorities', item.id), { recurrence: item.recurrence, priority: item.priority });
             }
           }
         }
 
-        // Calculate dynamic scaling variations via parsed custom duration limits
+        // Parse automatic change calculations
         let liveComputedPriority = parseInt(item.priority) || 0;
         let scalingStatsLog = "";
 
@@ -599,50 +673,50 @@
           const elapsedMs = currentMs - genesisMs;
           if (elapsedMs >= totalDuration) {
             liveComputedPriority = targetValue;
-            scalingStatsLog = "Target priority reached!";
+            scalingStatsLog = "Priority change complete!";
           } else {
             const ratio = elapsedMs / totalDuration;
             const baseline = parseInt(item.priority) || 0;
             liveComputedPriority = Math.round(baseline + (targetValue - baseline) * ratio);
             liveComputedPriority = Math.max(0, Math.min(100, liveComputedPriority));
-            scalingStatsLog = `Shifting progress: ${liveComputedPriority}% (Adjusting...)`;
+            scalingStatsLog = `Auto-changing: currently at ${liveComputedPriority}%`;
           }
         }
 
-        displayedItemsCount++;
+        return { item, liveComputedPriority, scalingStatsLog };
+      });
 
-        // Construct Card Template Element with embedded, dynamic visual percentage bar
-        const card = document.createElement('div');
-        card.className = "flex flex-col p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm gap-2.5 transition-all duration-300";
-        card.innerHTML = `
-          <div class="flex items-center justify-between gap-3">
-            <div class="flex items-center gap-2.5 min-w-0 flex-1">
-              <input type="checkbox" data-item-id="${item.id}" class="task-select-checkbox accent-indigo-500 rounded cursor-pointer">
-              <div class="truncate">
-                <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block truncate">${item.name}</span>
-                ${scalingStatsLog ? `<span class="text-[9px] font-semibold text-indigo-500 block mt-0.5"><i class="fa-solid fa-clock-rotate-left"></i> ${scalingStatsLog}</span>` : ''}
-              </div>
-            </div>
-            <div class="flex items-center gap-2 shrink-0">
-              <span class="text-xs font-black text-indigo-600 dark:text-indigo-400 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-2 py-1 rounded-lg transition-all duration-300">${liveComputedPriority}%</span>
-              <button onclick="deleteActionTask('${item.id}')" class="w-6 h-6 rounded bg-slate-50 dark:bg-slate-950 text-slate-400 hover:text-rose-500 flex items-center justify-center text-xs"><i class="fa-solid fa-trash-can"></i></button>
-            </div>
-          </div>
-          <!-- Micro progress bar showing visually how far prioritized the task is -->
-          <div class="w-full bg-slate-100 dark:bg-slate-950 h-1 rounded-full overflow-hidden">
-            <div class="h-full rounded-full transition-all duration-300 ${getProgressBarColor(liveComputedPriority)}" style="width: ${liveComputedPriority}%"></div>
-          </div>
-        `;
+      // Sort items: Priority descending, then alphabetically
+      processedItems.sort((a, b) => {
+        const priorityDiff = b.liveComputedPriority - a.liveComputedPriority;
+        if (priorityDiff !== 0) return priorityDiff;
+        return a.item.name.localeCompare(b.item.name);
+      });
 
-        // Routing checks to evaluate if task item belongs to custom dropped sub-container or standard root zone
-        if (item.associatedSubjectId && document.getElementById(`group-container-${item.associatedSubjectId}`)) {
-          document.getElementById(`group-container-${item.associatedSubjectId}`).appendChild(card);
-        } else {
-          itemsListContainer.appendChild(card);
+      // Remove task cards from DOM that were deleted or are no longer active
+      const currentTaskIds = new Set(processedItems.map(p => `task-card-${p.item.id}`));
+      document.querySelectorAll('.task-card').forEach(card => {
+        if (!currentTaskIds.has(card.id)) {
+          card.remove();
         }
       });
 
-      // Evaluate Toggle Empty state conditions layouts
+      // Step 3: Populate sorted cards smoothly into their containers
+      processedItems.forEach(p => {
+        displayedItemsCount++;
+        const card = renderTaskCard(p.item, p.liveComputedPriority, p.scalingStatsLog);
+        
+        const hasContainer = p.item.associatedSubjectId && document.getElementById(`group-container-${p.item.associatedSubjectId}`);
+        const targetContainer = hasContainer 
+          ? document.getElementById(`group-container-${p.item.associatedSubjectId}`) 
+          : itemsListContainer;
+
+        if (targetContainer) {
+          targetContainer.appendChild(card);
+        }
+      });
+
+      // Evaluate empty state and update metrics counter
       emptyState.classList.toggle('hidden', displayedItemsCount > 0);
       document.getElementById('list-counter').innerText = `${displayedItemsCount} tasks active`;
     }
@@ -702,7 +776,32 @@
       checkboxSelectAll.checked = false;
     };
 
-    // FORM HANDLE
+    // Theme Switcher Logic
+    function initTheme() {
+      const storedTheme = localStorage.getItem('prioritizeit_theme') || 'light';
+      setTheme(storedTheme);
+    }
+
+    function setTheme(theme) {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        themeIcon.className = "fa-solid fa-sun text-amber-400";
+        localStorage.setItem('prioritizeit_theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        themeIcon.className = "fa-solid fa-moon text-slate-600";
+        localStorage.setItem('prioritizeit_theme', 'light');
+      }
+    }
+
+    btnThemeToggle.addEventListener('click', () => {
+      const isCurrentlyDark = document.documentElement.classList.contains('dark');
+      setTheme(isCurrentlyDark ? 'light' : 'dark');
+    });
+
+    initTheme();
+
+    // SUBMIT FORM ACTION ELEMENT
     addItemForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const name = inputTaskName.value.trim();
@@ -796,6 +895,9 @@
 
     // AUTH SEED ROUTINES LIFECYCLE WATCHERS
     window.addEventListener('DOMContentLoaded', () => {
+      // Run UI reconciler regularly (every 1 second) to smoothly animate priority progress bars over time
+      setInterval(processAndRenderWorkspace, 1000);
+
       if (firebaseEnabled) {
         onAuthStateChanged(auth, (user) => {
           globalLoader.classList.add('opacity-0', 'pointer-events-none');
